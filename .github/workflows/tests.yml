@@ -10,6 +10,17 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    env:
+      TEST_MODE: "true"
+      SUPABASE_URL: "https://example.supabase.co"
+      SUPABASE_SERVICE_ROLE_KEY: "test-placeholder"
+      GEMINI_API_KEY: "test-placeholder"
+      BUFFER_API_KEY: "test-placeholder"
+      BUFFER_FACEBOOK_CHANNEL_ID: "test-facebook"
+      BUFFER_INSTAGRAM_CHANNEL_ID: "test-instagram"
+      BUFFER_THREADS_CHANNEL_ID: "test-threads"
+      DEFAULT_DESTINATION_URL: "https://example.com"
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
