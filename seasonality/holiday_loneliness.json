@@ -1,0 +1,23 @@
+{
+  "name": "Holiday Loneliness",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 10
+  },
+  "lead_days": 0,
+  "follow_days": 20,
+  "eligible_campaigns": [
+    "loneliness",
+    "grief"
+  ],
+  "suggested_angles": [
+    "connection",
+    "presence"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.1,
+  "active": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Back To School",
+  "date_rule": {
+    "type": "fixed",
+    "month": 8,
+    "day": 15
+  },
+  "lead_days": 10,
+  "follow_days": 5,
+  "eligible_campaigns": [
+    "busy_parent",
+    "college_student",
+    "major_life_change"
+  ],
+  "suggested_angles": [
+    "new routines",
+    "transition"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.1,
+  "active": true
+}

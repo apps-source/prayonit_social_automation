@@ -1,0 +1,20 @@
+{
+  "name": "Caregiver",
+  "description": "Someone caring for a family member.",
+  "concerns": [
+    "exhaustion",
+    "isolation"
+  ],
+  "preferred_tone": "gentle, validating",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "caregiver",
+    "burnout",
+    "health_worry"
+  ],
+  "weight": 0.9,
+  "active": true
+}

@@ -1,0 +1,71 @@
+{
+  "name": "Grief",
+  "goal": "Reach people carrying loss, with care and restraint.",
+  "pain_point": "carrying grief and not knowing how to pray through it",
+  "emotional_promise": "a gentle place to bring grief honestly to God",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you carrying grief and not knowing how to pray through it?",
+    "What if a gentle place to bring grief honestly to God was one tap away?",
+    "You don't have to keep carrying grief and not knowing how to pray through it alone.",
+    "There's a simple way through carrying grief and not knowing how to pray through it."
+  ],
+  "body_angles": [
+    "Prayonit meets you in carrying grief and not knowing how to pray through it with a gentle place to bring grief honestly to God.",
+    "No pressure, no perfect words. Just a gentle place to bring grief honestly to God, built around today.",
+    "Turn carrying grief and not knowing how to pray through it into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone carrying grief and not knowing how to pray through it, and show how Prayonit gives them a gentle place to bring grief honestly to God."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about carrying grief and not knowing how to pray through it, then a quick line about a gentle place to bring grief honestly to God."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about carrying grief and not knowing how to pray through it, ending with a gentle place to bring grief honestly to God."
+  ],
+  "thread_topics": [
+    "what it's actually like carrying grief and not knowing how to pray through it",
+    "why a gentle place to bring grief honestly to God matters more than perfect words",
+    "small steps that help with carrying grief and not knowing how to pray through it"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "person_grieving",
+    "general_christian"
+  ],
+  "weight": 0.9,
+  "active": true
+}

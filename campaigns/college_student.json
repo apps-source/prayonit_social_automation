@@ -1,0 +1,70 @@
+{
+  "name": "College Student",
+  "goal": "Reach students juggling school and faith.",
+  "pain_point": "juggling school, stress, and faith all at once",
+  "emotional_promise": "a fast, simple prayer that fits between classes",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you juggling school, stress, and faith all at once?",
+    "What if a fast, simple prayer that fits between classes was one tap away?",
+    "You don't have to keep juggling school, stress, and faith all at once alone.",
+    "There's a simple way through juggling school, stress, and faith all at once."
+  ],
+  "body_angles": [
+    "Prayonit meets you in juggling school, stress, and faith all at once with a fast, simple prayer that fits between classes.",
+    "No pressure, no perfect words. Just a fast, simple prayer that fits between classes, built around today.",
+    "Turn juggling school, stress, and faith all at once into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone juggling school, stress, and faith all at once, and show how Prayonit gives them a fast, simple prayer that fits between classes."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about juggling school, stress, and faith all at once, then a quick line about a fast, simple prayer that fits between classes."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about juggling school, stress, and faith all at once, ending with a fast, simple prayer that fits between classes."
+  ],
+  "thread_topics": [
+    "what it's actually like juggling school, stress, and faith all at once",
+    "why a fast, simple prayer that fits between classes matters more than perfect words",
+    "small steps that help with juggling school, stress, and faith all at once"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "college_student"
+  ],
+  "weight": 0.9,
+  "active": true
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Thanksgiving",
+  "date_rule": {
+    "type": "nth_weekday",
+    "month": 11,
+    "weekday": 3,
+    "n": 4
+  },
+  "lead_days": 4,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "gratitude",
+    "prayer_for_family"
+  ],
+  "suggested_angles": [
+    "gratitude"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.3,
+  "active": true
+}

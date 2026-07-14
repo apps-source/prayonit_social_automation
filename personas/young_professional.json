@@ -1,0 +1,21 @@
+{
+  "name": "Young Professional",
+  "description": "An early-career adult balancing work and faith.",
+  "concerns": [
+    "career stress",
+    "burnout"
+  ],
+  "preferred_tone": "confident, modern",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "job_stress",
+    "purpose",
+    "confidence",
+    "decision_making"
+  ],
+  "weight": 0.9,
+  "active": true
+}

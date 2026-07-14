@@ -1,0 +1,70 @@
+{
+  "name": "Waiting For Answers",
+  "goal": "Reach people in a season of waiting.",
+  "pain_point": "waiting on an answer and feeling stuck in the meantime",
+  "emotional_promise": "a guided prayer for the hard, uncertain waiting season",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you waiting on an answer and feeling stuck in the meantime?",
+    "What if a guided prayer for the hard, uncertain waiting season was one tap away?",
+    "You don't have to keep waiting on an answer and feeling stuck in the meantime alone.",
+    "There's a simple way through waiting on an answer and feeling stuck in the meantime."
+  ],
+  "body_angles": [
+    "Prayonit meets you in waiting on an answer and feeling stuck in the meantime with a guided prayer for the hard, uncertain waiting season.",
+    "No pressure, no perfect words. Just a guided prayer for the hard, uncertain waiting season, built around today.",
+    "Turn waiting on an answer and feeling stuck in the meantime into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone waiting on an answer and feeling stuck in the meantime, and show how Prayonit gives them a guided prayer for the hard, uncertain waiting season."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about waiting on an answer and feeling stuck in the meantime, then a quick line about a guided prayer for the hard, uncertain waiting season."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about waiting on an answer and feeling stuck in the meantime, ending with a guided prayer for the hard, uncertain waiting season."
+  ],
+  "thread_topics": [
+    "what it's actually like waiting on an answer and feeling stuck in the meantime",
+    "why a guided prayer for the hard, uncertain waiting season matters more than perfect words",
+    "small steps that help with waiting on an answer and feeling stuck in the meantime"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian"
+  ],
+  "weight": 0.9,
+  "active": true
+}

@@ -1,0 +1,71 @@
+{
+  "name": "Feeling Disconnected From God",
+  "goal": "Reach people who feel spiritually distant.",
+  "pain_point": "feeling distant from God and not sure how to reconnect",
+  "emotional_promise": "a simple, low-pressure way to reconnect with God today",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you feeling distant from God and not sure how to reconnect?",
+    "What if a simple, low-pressure way to reconnect with God today was one tap away?",
+    "You don't have to keep feeling distant from God and not sure how to reconnect alone.",
+    "There's a simple way through feeling distant from God and not sure how to reconnect."
+  ],
+  "body_angles": [
+    "Prayonit meets you in feeling distant from God and not sure how to reconnect with a simple, low-pressure way to reconnect with God today.",
+    "No pressure, no perfect words. Just a simple, low-pressure way to reconnect with God today, built around today.",
+    "Turn feeling distant from God and not sure how to reconnect into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone feeling distant from God and not sure how to reconnect, and show how Prayonit gives them a simple, low-pressure way to reconnect with God today."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about feeling distant from God and not sure how to reconnect, then a quick line about a simple, low-pressure way to reconnect with God today."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about feeling distant from God and not sure how to reconnect, ending with a simple, low-pressure way to reconnect with God today."
+  ],
+  "thread_topics": [
+    "what it's actually like feeling distant from God and not sure how to reconnect",
+    "why a simple, low-pressure way to reconnect with God today matters more than perfect words",
+    "small steps that help with feeling distant from God and not sure how to reconnect"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "returning_to_faith",
+    "general_christian"
+  ],
+  "weight": 1.1,
+  "active": true
+}

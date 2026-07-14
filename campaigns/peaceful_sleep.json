@@ -1,0 +1,71 @@
+{
+  "name": "Peaceful Sleep",
+  "goal": "Reach people who want a calmer bedtime routine.",
+  "pain_point": "going to bed with a mind that won't quiet down",
+  "emotional_promise": "a calming prayer routine to help you rest",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you going to bed with a mind that won't quiet down?",
+    "What if a calming prayer routine to help you rest was one tap away?",
+    "You don't have to keep going to bed with a mind that won't quiet down alone.",
+    "There's a simple way through going to bed with a mind that won't quiet down."
+  ],
+  "body_angles": [
+    "Prayonit meets you in going to bed with a mind that won't quiet down with a calming prayer routine to help you rest.",
+    "No pressure, no perfect words. Just a calming prayer routine to help you rest, built around today.",
+    "Turn going to bed with a mind that won't quiet down into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone going to bed with a mind that won't quiet down, and show how Prayonit gives them a calming prayer routine to help you rest."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about going to bed with a mind that won't quiet down, then a quick line about a calming prayer routine to help you rest."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about going to bed with a mind that won't quiet down, ending with a calming prayer routine to help you rest."
+  ],
+  "thread_topics": [
+    "what it's actually like going to bed with a mind that won't quiet down",
+    "why a calming prayer routine to help you rest matters more than perfect words",
+    "small steps that help with going to bed with a mind that won't quiet down"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "person_with_anxiety"
+  ],
+  "weight": 1.0,
+  "active": true
+}

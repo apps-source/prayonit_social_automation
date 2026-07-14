@@ -1,0 +1,22 @@
+{
+  "name": "Christmas Eve",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 24
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "gratitude",
+    "hope",
+    "prayer_for_family"
+  ],
+  "suggested_angles": [
+    "gratitude",
+    "family"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}

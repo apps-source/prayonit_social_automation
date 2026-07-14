@@ -1,0 +1,71 @@
+{
+  "name": "Building A Prayer Habit",
+  "goal": "Help inconsistent pray-ers build a daily habit.",
+  "pain_point": "wanting to pray daily but never actually sticking with it",
+  "emotional_promise": "a simple daily habit that finally sticks",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you wanting to pray daily but never actually sticking with it?",
+    "What if a simple daily habit that finally sticks was one tap away?",
+    "You don't have to keep wanting to pray daily but never actually sticking with it alone.",
+    "There's a simple way through wanting to pray daily but never actually sticking with it."
+  ],
+  "body_angles": [
+    "Prayonit meets you in wanting to pray daily but never actually sticking with it with a simple daily habit that finally sticks.",
+    "No pressure, no perfect words. Just a simple daily habit that finally sticks, built around today.",
+    "Turn wanting to pray daily but never actually sticking with it into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone wanting to pray daily but never actually sticking with it, and show how Prayonit gives them a simple daily habit that finally sticks."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about wanting to pray daily but never actually sticking with it, then a quick line about a simple daily habit that finally sticks."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about wanting to pray daily but never actually sticking with it, ending with a simple daily habit that finally sticks."
+  ],
+  "thread_topics": [
+    "what it's actually like wanting to pray daily but never actually sticking with it",
+    "why a simple daily habit that finally sticks matters more than perfect words",
+    "small steps that help with wanting to pray daily but never actually sticking with it"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "young_professional"
+  ],
+  "weight": 1.0,
+  "active": true
+}

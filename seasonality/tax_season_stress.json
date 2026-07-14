@@ -1,0 +1,20 @@
+{
+  "name": "Tax Season Stress",
+  "date_rule": {
+    "type": "fixed",
+    "month": 3,
+    "day": 1
+  },
+  "lead_days": 0,
+  "follow_days": 44,
+  "eligible_campaigns": [
+    "financial_stress",
+    "stress"
+  ],
+  "suggested_angles": [
+    "financial pressure"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

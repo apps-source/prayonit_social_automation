@@ -1,0 +1,71 @@
+{
+  "name": "Relationship Conflict",
+  "goal": "Reach people navigating conflict.",
+  "pain_point": "navigating conflict with someone you love and unsure how to pray about it",
+  "emotional_promise": "a guided prayer to bring a hard relationship to God",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you navigating conflict with someone you love and unsure how to pray about it?",
+    "What if a guided prayer to bring a hard relationship to God was one tap away?",
+    "You don't have to keep navigating conflict with someone you love and unsure how to pray about it alone.",
+    "There's a simple way through navigating conflict with someone you love and unsure how to pray about it."
+  ],
+  "body_angles": [
+    "Prayonit meets you in navigating conflict with someone you love and unsure how to pray about it with a guided prayer to bring a hard relationship to God.",
+    "No pressure, no perfect words. Just a guided prayer to bring a hard relationship to God, built around today.",
+    "Turn navigating conflict with someone you love and unsure how to pray about it into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone navigating conflict with someone you love and unsure how to pray about it, and show how Prayonit gives them a guided prayer to bring a hard relationship to God."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about navigating conflict with someone you love and unsure how to pray about it, then a quick line about a guided prayer to bring a hard relationship to God."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about navigating conflict with someone you love and unsure how to pray about it, ending with a guided prayer to bring a hard relationship to God."
+  ],
+  "thread_topics": [
+    "what it's actually like navigating conflict with someone you love and unsure how to pray about it",
+    "why a guided prayer to bring a hard relationship to God matters more than perfect words",
+    "small steps that help with navigating conflict with someone you love and unsure how to pray about it"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "married_couple",
+    "general_christian"
+  ],
+  "weight": 0.8,
+  "active": true
+}

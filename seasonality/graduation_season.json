@@ -1,0 +1,22 @@
+{
+  "name": "Graduation Season",
+  "date_rule": {
+    "type": "fixed",
+    "month": 5,
+    "day": 1
+  },
+  "lead_days": 0,
+  "follow_days": 30,
+  "eligible_campaigns": [
+    "college_student",
+    "major_life_change",
+    "purpose"
+  ],
+  "suggested_angles": [
+    "new chapter",
+    "transition"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

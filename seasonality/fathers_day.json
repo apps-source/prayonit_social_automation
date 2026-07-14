@@ -1,0 +1,22 @@
+{
+  "name": "Fathers Day",
+  "date_rule": {
+    "type": "nth_weekday",
+    "month": 6,
+    "weekday": 6,
+    "n": 3
+  },
+  "lead_days": 3,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "prayer_for_family",
+    "prayer_for_children"
+  ],
+  "suggested_angles": [
+    "fatherhood",
+    "family"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}

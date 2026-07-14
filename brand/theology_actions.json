@@ -1,0 +1,62 @@
+{
+  "surrender_actions": [
+    "Give today’s burdens to God in prayer.",
+    "Lay what is weighing on you before the Lord.",
+    "Bring your worries to God tonight."
+  ],
+  "guidance_actions": [
+    "Seek God’s guidance through prayer.",
+    "Ask God for wisdom in your decisions.",
+    "Pray for clarity and direction from the Lord."
+  ],
+  "gratitude_actions": [
+    "Thank God for His blessings.",
+    "Give God praise for His goodness.",
+    "Express gratitude to the Lord in prayer."
+  ],
+  "praise_actions": [
+    "Give God praise.",
+    "Praise the Lord for His faithfulness.",
+    "Worship God for who He is."
+  ],
+  "comfort_actions": [
+    "Find peace through prayer.",
+    "Receive comfort from God in your time of need.",
+    "Let God’s presence bring you solace."
+  ],
+  "morning_actions": [
+    "Start your day by giving your worries to God.",
+    "Begin your morning seeking God’s presence.",
+    "Pray for strength and guidance for the day ahead."
+  ],
+  "evening_actions": [
+    "End your day by giving your burdens to God.",
+    "Reflect on your day and pray before sleep.",
+    "Release your worries to the Lord tonight."
+  ],
+  "anxiety_actions": [
+    "Cast your anxieties on the Lord in prayer.",
+    "Bring your anxious thoughts to God.",
+    "Find peace from anxiety through prayer."
+  ],
+  "grief_actions": [
+    "Bring your grief to God in prayer.",
+    "Find comfort in God’s presence during your loss.",
+    "Lay your sorrow before the Lord."
+  ],
+  "purpose_actions": [
+    "Seek God’s purpose for your life through prayer.",
+    "Pray for clarity on your calling.",
+    "Ask God to reveal your path."
+  ],
+  "relationship_actions": [
+    "Pray for strength and wisdom in your relationships.",
+    "Bring your relationship conflicts to God.",
+    "Seek God’s guidance for your family and friends."
+  ],
+  "financial_stress_actions": [
+    "Cast your financial worries on the Lord.",
+    "Pray for provision and wisdom in your finances.",
+    "Seek God’s peace amidst financial stress."
+  ]
+}

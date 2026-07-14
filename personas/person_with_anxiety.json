@@ -1,0 +1,20 @@
+{
+  "name": "Person With Anxiety",
+  "description": "Someone experiencing frequent anxious feelings.",
+  "concerns": [
+    "racing thoughts",
+    "overwhelm"
+  ],
+  "preferred_tone": "calm, validating, never diagnostic",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "anxiety",
+    "bedtime_worry",
+    "peaceful_sleep"
+  ],
+  "weight": 1.1,
+  "active": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Good Friday",
+  "date_rule": {
+    "type": "easter_relative",
+    "offset_days": -2
+  },
+  "lead_days": 1,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "grief",
+    "hope"
+  ],
+  "suggested_angles": [
+    "solemn reflection"
+  ],
+  "prohibited_tones": [
+    "celebratory",
+    "promotional"
+  ],
+  "weight_boost": 1.0,
+  "active": true
+}

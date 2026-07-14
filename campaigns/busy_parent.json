@@ -1,0 +1,71 @@
+{
+  "name": "Busy Parent",
+  "goal": "Reach parents with no quiet time to pray.",
+  "pain_point": "being a parent with no quiet moment left to pray",
+  "emotional_promise": "a prayer that fits into the middle of a busy day",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you being a parent with no quiet moment left to pray?",
+    "What if a prayer that fits into the middle of a busy day was one tap away?",
+    "You don't have to keep being a parent with no quiet moment left to pray alone.",
+    "There's a simple way through being a parent with no quiet moment left to pray."
+  ],
+  "body_angles": [
+    "Prayonit meets you in being a parent with no quiet moment left to pray with a prayer that fits into the middle of a busy day.",
+    "No pressure, no perfect words. Just a prayer that fits into the middle of a busy day, built around today.",
+    "Turn being a parent with no quiet moment left to pray into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone being a parent with no quiet moment left to pray, and show how Prayonit gives them a prayer that fits into the middle of a busy day."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about being a parent with no quiet moment left to pray, then a quick line about a prayer that fits into the middle of a busy day."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about being a parent with no quiet moment left to pray, ending with a prayer that fits into the middle of a busy day."
+  ],
+  "thread_topics": [
+    "what it's actually like being a parent with no quiet moment left to pray",
+    "why a prayer that fits into the middle of a busy day matters more than perfect words",
+    "small steps that help with being a parent with no quiet moment left to pray"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "busy_parent",
+    "single_parent"
+  ],
+  "weight": 1.0,
+  "active": true
+}

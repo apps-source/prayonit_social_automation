@@ -1,0 +1,21 @@
+{
+  "name": "Palm Sunday",
+  "date_rule": {
+    "type": "easter_relative",
+    "offset_days": -7
+  },
+  "lead_days": 1,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "hope",
+    "purpose"
+  ],
+  "suggested_angles": [
+    "anticipation"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.0,
+  "active": true
+}

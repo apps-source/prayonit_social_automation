@@ -1,0 +1,21 @@
+{
+  "name": "Easter",
+  "date_rule": {
+    "type": "easter_relative",
+    "offset_days": 0
+  },
+  "lead_days": 3,
+  "follow_days": 2,
+  "eligible_campaigns": [
+    "hope",
+    "fresh_start",
+    "gratitude"
+  ],
+  "suggested_angles": [
+    "new life",
+    "hope"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.4,
+  "active": true
+}

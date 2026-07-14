@@ -1,0 +1,71 @@
+{
+  "name": "Gratitude",
+  "goal": "Reach people who want to pray more thankfully.",
+  "pain_point": "rushing through prayer without ever pausing to give thanks",
+  "emotional_promise": "a guided way to actually slow down and give thanks",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you rushing through prayer without ever pausing to give thanks?",
+    "What if a guided way to actually slow down and give thanks was one tap away?",
+    "You don't have to keep rushing through prayer without ever pausing to give thanks alone.",
+    "There's a simple way through rushing through prayer without ever pausing to give thanks."
+  ],
+  "body_angles": [
+    "Prayonit meets you in rushing through prayer without ever pausing to give thanks with a guided way to actually slow down and give thanks.",
+    "No pressure, no perfect words. Just a guided way to actually slow down and give thanks, built around today.",
+    "Turn rushing through prayer without ever pausing to give thanks into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone rushing through prayer without ever pausing to give thanks, and show how Prayonit gives them a guided way to actually slow down and give thanks."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about rushing through prayer without ever pausing to give thanks, then a quick line about a guided way to actually slow down and give thanks."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about rushing through prayer without ever pausing to give thanks, ending with a guided way to actually slow down and give thanks."
+  ],
+  "thread_topics": [
+    "what it's actually like rushing through prayer without ever pausing to give thanks",
+    "why a guided way to actually slow down and give thanks matters more than perfect words",
+    "small steps that help with rushing through prayer without ever pausing to give thanks"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "retiree"
+  ],
+  "weight": 0.9,
+  "active": true
+}

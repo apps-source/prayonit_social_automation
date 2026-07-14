@@ -1,0 +1,22 @@
+{
+  "name": "Veterans Day",
+  "date_rule": {
+    "type": "fixed",
+    "month": 11,
+    "day": 11
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "veteran"
+  ],
+  "suggested_angles": [
+    "gratitude",
+    "respect"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.1,
+  "active": true
+}

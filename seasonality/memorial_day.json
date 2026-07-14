@@ -1,0 +1,24 @@
+{
+  "name": "Memorial Day",
+  "date_rule": {
+    "type": "nth_weekday",
+    "month": 5,
+    "weekday": 0,
+    "n": -1
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "veteran",
+    "grief"
+  ],
+  "suggested_angles": [
+    "remembrance",
+    "gratitude"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.0,
+  "active": true
+}

@@ -1,0 +1,33 @@
+{
+  "name": "General Christian",
+  "description": "A broad Christian audience open to prayer support.",
+  "concerns": [
+    "consistency",
+    "distraction",
+    "busyness"
+  ],
+  "preferred_tone": "warm, encouraging",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "general_christian",
+    "new_christian",
+    "returning_to_faith",
+    "busy_parent",
+    "single_parent",
+    "married_couple",
+    "college_student",
+    "young_professional",
+    "business_owner",
+    "caregiver",
+    "veteran",
+    "retiree",
+    "person_with_anxiety",
+    "person_grieving",
+    "person_under_financial_stress"
+  ],
+  "weight": 1.0,
+  "active": true
+}

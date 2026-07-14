@@ -1,0 +1,24 @@
+{
+  "name": "Lent",
+  "date_rule": {
+    "type": "easter_relative",
+    "offset_days": -40,
+    "span_days": 40
+  },
+  "lead_days": 0,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "fresh_start",
+    "forgiveness",
+    "purpose"
+  ],
+  "suggested_angles": [
+    "reflection",
+    "discipline"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.0,
+  "active": true
+}

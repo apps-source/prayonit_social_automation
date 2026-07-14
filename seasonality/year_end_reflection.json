@@ -1,0 +1,22 @@
+{
+  "name": "Year End Reflection",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 26
+  },
+  "lead_days": 0,
+  "follow_days": 5,
+  "eligible_campaigns": [
+    "gratitude",
+    "purpose",
+    "fresh_start"
+  ],
+  "suggested_angles": [
+    "reflection",
+    "gratitude"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.1,
+  "active": true
+}

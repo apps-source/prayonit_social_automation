@@ -1,0 +1,20 @@
+{
+  "name": "Back To School Stress",
+  "date_rule": {
+    "type": "fixed",
+    "month": 8,
+    "day": 20
+  },
+  "lead_days": 0,
+  "follow_days": 20,
+  "eligible_campaigns": [
+    "busy_parent",
+    "stress"
+  ],
+  "suggested_angles": [
+    "transition stress"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

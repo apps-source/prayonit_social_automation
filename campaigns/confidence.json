@@ -1,0 +1,71 @@
+{
+  "name": "Confidence",
+  "goal": "Reach people who feel insecure or unsure of themselves.",
+  "pain_point": "feeling unsure of yourself and needing steadier confidence",
+  "emotional_promise": "a prayer to root your confidence in something steady",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you feeling unsure of yourself and needing steadier confidence?",
+    "What if a prayer to root your confidence in something steady was one tap away?",
+    "You don't have to keep feeling unsure of yourself and needing steadier confidence alone.",
+    "There's a simple way through feeling unsure of yourself and needing steadier confidence."
+  ],
+  "body_angles": [
+    "Prayonit meets you in feeling unsure of yourself and needing steadier confidence with a prayer to root your confidence in something steady.",
+    "No pressure, no perfect words. Just a prayer to root your confidence in something steady, built around today.",
+    "Turn feeling unsure of yourself and needing steadier confidence into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone feeling unsure of yourself and needing steadier confidence, and show how Prayonit gives them a prayer to root your confidence in something steady."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about feeling unsure of yourself and needing steadier confidence, then a quick line about a prayer to root your confidence in something steady."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about feeling unsure of yourself and needing steadier confidence, ending with a prayer to root your confidence in something steady."
+  ],
+  "thread_topics": [
+    "what it's actually like feeling unsure of yourself and needing steadier confidence",
+    "why a prayer to root your confidence in something steady matters more than perfect words",
+    "small steps that help with feeling unsure of yourself and needing steadier confidence"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "young_adult"
+  ],
+  "weight": 0.8,
+  "active": true
+}

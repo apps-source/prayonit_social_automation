@@ -1,0 +1,72 @@
+{
+  "name": "Financial Stress",
+  "goal": "Reach people anxious about money.",
+  "pain_point": "feeling anxious about money and where things are headed",
+  "emotional_promise": "a place to bring real financial worry honestly to God",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you feeling anxious about money and where things are headed?",
+    "What if a place to bring real financial worry honestly to God was one tap away?",
+    "You don't have to keep feeling anxious about money and where things are headed alone.",
+    "There's a simple way through feeling anxious about money and where things are headed."
+  ],
+  "body_angles": [
+    "Prayonit meets you in feeling anxious about money and where things are headed with a place to bring real financial worry honestly to God.",
+    "No pressure, no perfect words. Just a place to bring real financial worry honestly to God, built around today.",
+    "Turn feeling anxious about money and where things are headed into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone feeling anxious about money and where things are headed, and show how Prayonit gives them a place to bring real financial worry honestly to God."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about feeling anxious about money and where things are headed, then a quick line about a place to bring real financial worry honestly to God."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about feeling anxious about money and where things are headed, ending with a place to bring real financial worry honestly to God."
+  ],
+  "thread_topics": [
+    "what it's actually like feeling anxious about money and where things are headed",
+    "why a place to bring real financial worry honestly to God matters more than perfect words",
+    "small steps that help with feeling anxious about money and where things are headed"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "young_professional",
+    "business_owner",
+    "general_christian"
+  ],
+  "weight": 0.9,
+  "active": true
+}

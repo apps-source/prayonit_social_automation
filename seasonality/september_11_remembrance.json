@@ -1,0 +1,24 @@
+{
+  "name": "September 11 Remembrance",
+  "date_rule": {
+    "type": "fixed",
+    "month": 9,
+    "day": 11
+  },
+  "lead_days": 1,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "grief",
+    "veteran",
+    "fear"
+  ],
+  "suggested_angles": [
+    "remembrance"
+  ],
+  "prohibited_tones": [
+    "celebratory",
+    "promotional"
+  ],
+  "weight_boost": 1.0,
+  "active": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Christmas Day",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 25
+  },
+  "lead_days": 0,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "gratitude",
+    "hope",
+    "prayer_for_family"
+  ],
+  "suggested_angles": [
+    "gratitude",
+    "family"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.3,
+  "active": true
+}

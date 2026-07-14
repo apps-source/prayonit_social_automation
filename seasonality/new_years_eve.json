@@ -1,0 +1,21 @@
+{
+  "name": "New Years Eve",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 31
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "fresh_start",
+    "gratitude"
+  ],
+  "suggested_angles": [
+    "reflection",
+    "fresh start"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}

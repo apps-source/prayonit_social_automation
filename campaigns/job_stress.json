@@ -1,0 +1,71 @@
+{
+  "name": "Job Stress",
+  "goal": "Reach people overwhelmed at work.",
+  "pain_point": "feeling overwhelmed and undervalued at work",
+  "emotional_promise": "a quick prayer break built for a stressful workday",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you feeling overwhelmed and undervalued at work?",
+    "What if a quick prayer break built for a stressful workday was one tap away?",
+    "You don't have to keep feeling overwhelmed and undervalued at work alone.",
+    "There's a simple way through feeling overwhelmed and undervalued at work."
+  ],
+  "body_angles": [
+    "Prayonit meets you in feeling overwhelmed and undervalued at work with a quick prayer break built for a stressful workday.",
+    "No pressure, no perfect words. Just a quick prayer break built for a stressful workday, built around today.",
+    "Turn feeling overwhelmed and undervalued at work into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone feeling overwhelmed and undervalued at work, and show how Prayonit gives them a quick prayer break built for a stressful workday."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about feeling overwhelmed and undervalued at work, then a quick line about a quick prayer break built for a stressful workday."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about feeling overwhelmed and undervalued at work, ending with a quick prayer break built for a stressful workday."
+  ],
+  "thread_topics": [
+    "what it's actually like feeling overwhelmed and undervalued at work",
+    "why a quick prayer break built for a stressful workday matters more than perfect words",
+    "small steps that help with feeling overwhelmed and undervalued at work"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "young_professional",
+    "business_owner"
+  ],
+  "weight": 0.9,
+  "active": true
+}

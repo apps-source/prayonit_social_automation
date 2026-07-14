@@ -1,0 +1,20 @@
+{
+  "name": "Business Owner",
+  "description": "An owner or founder under constant pressure.",
+  "concerns": [
+    "financial pressure",
+    "responsibility overload"
+  ],
+  "preferred_tone": "direct, respectful of time",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "business_owner",
+    "financial_stress",
+    "job_stress"
+  ],
+  "weight": 0.8,
+  "active": true
+}

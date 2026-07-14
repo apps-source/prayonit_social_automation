@@ -1,0 +1,21 @@
+{
+  "name": "Advent",
+  "date_rule": {
+    "type": "fixed",
+    "month": 12,
+    "day": 1
+  },
+  "lead_days": 0,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "hope",
+    "fresh_start"
+  ],
+  "suggested_angles": [
+    "anticipation",
+    "hope"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.1,
+  "active": true
+}

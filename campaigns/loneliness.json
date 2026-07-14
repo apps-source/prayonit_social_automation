@@ -1,0 +1,71 @@
+{
+  "name": "Loneliness",
+  "goal": "Reach people who feel isolated or unseen.",
+  "pain_point": "feeling alone even when surrounded by people",
+  "emotional_promise": "a reminder that you're not praying alone",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you feeling alone even when surrounded by people?",
+    "What if a reminder that you're not praying alone was one tap away?",
+    "You don't have to keep feeling alone even when surrounded by people alone.",
+    "There's a simple way through feeling alone even when surrounded by people."
+  ],
+  "body_angles": [
+    "Prayonit meets you in feeling alone even when surrounded by people with a reminder that you're not praying alone.",
+    "No pressure, no perfect words. Just a reminder that you're not praying alone, built around today.",
+    "Turn feeling alone even when surrounded by people into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone feeling alone even when surrounded by people, and show how Prayonit gives them a reminder that you're not praying alone."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about feeling alone even when surrounded by people, then a quick line about a reminder that you're not praying alone."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about feeling alone even when surrounded by people, ending with a reminder that you're not praying alone."
+  ],
+  "thread_topics": [
+    "what it's actually like feeling alone even when surrounded by people",
+    "why a reminder that you're not praying alone matters more than perfect words",
+    "small steps that help with feeling alone even when surrounded by people"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "retiree"
+  ],
+  "weight": 1.0,
+  "active": true
+}

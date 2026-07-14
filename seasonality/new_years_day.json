@@ -1,0 +1,21 @@
+{
+  "name": "New Years Day",
+  "date_rule": {
+    "type": "fixed",
+    "month": 1,
+    "day": 1
+  },
+  "lead_days": 3,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "fresh_start",
+    "app_trial"
+  ],
+  "suggested_angles": [
+    "fresh start",
+    "new habits"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.3,
+  "active": true
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Valentines Day",
+  "date_rule": {
+    "type": "fixed",
+    "month": 2,
+    "day": 14
+  },
+  "lead_days": 3,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "marriage",
+    "relationship_conflict",
+    "prayer_for_relationship"
+  ],
+  "suggested_angles": [
+    "love",
+    "relationships"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}

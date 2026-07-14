@@ -1,0 +1,19 @@
+{
+  "name": "Veteran",
+  "description": "A veteran navigating transition or memories.",
+  "concerns": [
+    "difficult memories",
+    "transition stress"
+  ],
+  "preferred_tone": "respectful, steady",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "veteran",
+    "major_life_change"
+  ],
+  "weight": 0.7,
+  "active": true
+}

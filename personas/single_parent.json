@@ -1,0 +1,20 @@
+{
+  "name": "Single Parent",
+  "description": "A single parent carrying most responsibilities alone.",
+  "concerns": [
+    "exhaustion",
+    "lack of support"
+  ],
+  "preferred_tone": "compassionate, practical",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "single_parent",
+    "prayer_for_family",
+    "burnout"
+  ],
+  "weight": 1.0,
+  "active": true
+}

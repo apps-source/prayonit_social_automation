@@ -1,0 +1,24 @@
+{
+  "name": "Fall",
+  "date_rule": {
+    "type": "season",
+    "months": [
+      9,
+      10,
+      11
+    ]
+  },
+  "lead_days": 0,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "gratitude",
+    "purpose"
+  ],
+  "suggested_angles": [
+    "reflection",
+    "harvest"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

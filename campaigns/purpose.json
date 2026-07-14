@@ -1,0 +1,72 @@
+{
+  "name": "Purpose",
+  "goal": "Reach people questioning their direction.",
+  "pain_point": "wondering if life has real direction or purpose",
+  "emotional_promise": "a guided moment to seek clarity through prayer",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you wondering if life has real direction or purpose?",
+    "What if a guided moment to seek clarity through prayer was one tap away?",
+    "You don't have to keep wondering if life has real direction or purpose alone.",
+    "There's a simple way through wondering if life has real direction or purpose."
+  ],
+  "body_angles": [
+    "Prayonit meets you in wondering if life has real direction or purpose with a guided moment to seek clarity through prayer.",
+    "No pressure, no perfect words. Just a guided moment to seek clarity through prayer, built around today.",
+    "Turn wondering if life has real direction or purpose into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone wondering if life has real direction or purpose, and show how Prayonit gives them a guided moment to seek clarity through prayer."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about wondering if life has real direction or purpose, then a quick line about a guided moment to seek clarity through prayer."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about wondering if life has real direction or purpose, ending with a guided moment to seek clarity through prayer."
+  ],
+  "thread_topics": [
+    "what it's actually like wondering if life has real direction or purpose",
+    "why a guided moment to seek clarity through prayer matters more than perfect words",
+    "small steps that help with wondering if life has real direction or purpose"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "young_professional",
+    "college_student",
+    "general_christian"
+  ],
+  "weight": 0.9,
+  "active": true
+}

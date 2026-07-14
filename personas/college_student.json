@@ -1,0 +1,20 @@
+{
+  "name": "College Student",
+  "description": "A student juggling school, social life, and faith.",
+  "concerns": [
+    "busyness",
+    "spiritual drift"
+  ],
+  "preferred_tone": "casual, relatable",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "college_student",
+    "young_adult",
+    "purpose"
+  ],
+  "weight": 0.9,
+  "active": true
+}

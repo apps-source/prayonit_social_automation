@@ -1,0 +1,21 @@
+{
+  "name": "Summer Travel",
+  "date_rule": {
+    "type": "fixed",
+    "month": 6,
+    "day": 15
+  },
+  "lead_days": 0,
+  "follow_days": 60,
+  "eligible_campaigns": [
+    "burnout",
+    "gratitude"
+  ],
+  "suggested_angles": [
+    "rest",
+    "adventure"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 0.9,
+  "active": true
+}

@@ -1,0 +1,101 @@
+{
+  "brand_name": "Prayonit",
+
+  "tagline": "Prayer for how you feel.",
+
+  "mission": "Help people connect with God through personalized Scripture, devotion, journaling, and AI-guided prayer based on how they feel.",
+
+  "core_features": [
+    "Mood selection",
+    "Relevant King James Bible scripture",
+    "Personalized devotion",
+    "AI-guided personalized prayer",
+    "Prayer journal",
+    "14-day free trial",
+    "Available on iPhone and Android"
+  ],
+
+  "approved_ctas": [
+    "Start your 14-day free trial.",
+    "Start your free 14-day journey today.",
+    "Try Prayonit with a free 14-day trial.",
+    "Download Prayonit today.",
+    "Begin your prayer journey today."
+  ],
+
+  "preferred_cta": "Start your 14-day free trial.",
+
+  "voice": {
+    "tone": [
+      "Hopeful",
+      "Encouraging",
+      "Peaceful",
+      "Warm",
+      "Authentic",
+      "Modern Christian",
+      "Compassionate"
+    ],
+
+    "avoid": [
+      "Fear",
+      "Guilt",
+      "Politics",
+      "Clickbait",
+      "Manipulation",
+      "Condemnation",
+      "Judgment"
+    ]
+  },
+
+  "approved_language": [
+    "Personalized prayer",
+    "Prayer based on how you feel",
+    "Guided prayer",
+    "Daily encouragement",
+    "Scripture",
+    "Reflection",
+    "Hope",
+    "Peace",
+    "Faith"
+  ],
+
+  "never_claim": [
+    "God is speaking through the app",
+    "Guaranteed healing",
+    "Guaranteed peace",
+    "Guaranteed happiness",
+    "Medical advice",
+    "Mental health treatment",
+    "Licensed counseling",
+    "Miracles",
+    "Prophecy",
+    "Divine revelation"
+  ],
+
+  "never_say": [
+    "Free app",
+    "100% free",
+    "Always free",
+    "Unlimited free",
+    "Free forever",
+    "God told me",
+    "Guaranteed results",
+    "Try it free today",
+    "Download for free",
+    "Try Prayonit free"
+  ],
+
+  "compact_trial_phrase": "Start your 14-day trial.",
+
+  "trial_policy": {
+    "length": "14 days",
+    "preferred_phrase": "Start your 14-day free trial.",
+    "alternate_phrase": "Try Prayonit with a free 14-day trial."
+  },
+
+  "app_store_links": {
+    "ios": "CONFIG_VALUE",
+    "android": "CONFIG_VALUE",
+    "website": "CONFIG_VALUE"
+  }
+}

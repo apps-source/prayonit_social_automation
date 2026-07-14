@@ -1,0 +1,20 @@
+{
+  "name": "Retiree",
+  "description": "An older adult with more time for reflection.",
+  "concerns": [
+    "loneliness",
+    "health concerns"
+  ],
+  "preferred_tone": "respectful, unhurried",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "loneliness",
+    "gratitude",
+    "health_worry"
+  ],
+  "weight": 0.8,
+  "active": true
+}

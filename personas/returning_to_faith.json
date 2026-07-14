@@ -1,0 +1,20 @@
+{
+  "name": "Returning To Faith",
+  "description": "Someone coming back to faith after time away.",
+  "concerns": [
+    "guilt about distance",
+    "not knowing how to restart"
+  ],
+  "preferred_tone": "welcoming, no-pressure",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "returning_to_faith",
+    "feeling_disconnected",
+    "fresh_start"
+  ],
+  "weight": 1.0,
+  "active": true
+}

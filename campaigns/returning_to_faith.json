@@ -1,0 +1,71 @@
+{
+  "name": "Returning To Faith",
+  "goal": "Reach people coming back after time away.",
+  "pain_point": "wanting to come back to faith after time away",
+  "emotional_promise": "a gentle, no-pressure way to start praying again",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you wanting to come back to faith after time away?",
+    "What if a gentle, no-pressure way to start praying again was one tap away?",
+    "You don't have to keep wanting to come back to faith after time away alone.",
+    "There's a simple way through wanting to come back to faith after time away."
+  ],
+  "body_angles": [
+    "Prayonit meets you in wanting to come back to faith after time away with a gentle, no-pressure way to start praying again.",
+    "No pressure, no perfect words. Just a gentle, no-pressure way to start praying again, built around today.",
+    "Turn wanting to come back to faith after time away into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone wanting to come back to faith after time away, and show how Prayonit gives them a gentle, no-pressure way to start praying again."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about wanting to come back to faith after time away, then a quick line about a gentle, no-pressure way to start praying again."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about wanting to come back to faith after time away, ending with a gentle, no-pressure way to start praying again."
+  ],
+  "thread_topics": [
+    "what it's actually like wanting to come back to faith after time away",
+    "why a gentle, no-pressure way to start praying again matters more than perfect words",
+    "small steps that help with wanting to come back to faith after time away"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "returning_to_faith",
+    "general_christian"
+  ],
+  "weight": 1.1,
+  "active": true
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Busy Parent",
+  "description": "A parent with little quiet time.",
+  "concerns": [
+    "lack of time",
+    "guilt over inconsistency"
+  ],
+  "preferred_tone": "practical, understanding",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "busy_parent",
+    "prayer_for_family",
+    "prayer_for_children",
+    "three_minute_prayer"
+  ],
+  "weight": 1.0,
+  "active": true
+}

@@ -1,0 +1,21 @@
+{
+  "name": "January Fresh Start",
+  "date_rule": {
+    "type": "fixed",
+    "month": 1,
+    "day": 2
+  },
+  "lead_days": 0,
+  "follow_days": 14,
+  "eligible_campaigns": [
+    "fresh_start",
+    "prayer_habit"
+  ],
+  "suggested_angles": [
+    "new habits",
+    "goals"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}

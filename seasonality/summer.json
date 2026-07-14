@@ -1,0 +1,24 @@
+{
+  "name": "Summer",
+  "date_rule": {
+    "type": "season",
+    "months": [
+      6,
+      7,
+      8
+    ]
+  },
+  "lead_days": 0,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "burnout",
+    "major_life_change"
+  ],
+  "suggested_angles": [
+    "rest",
+    "travel"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

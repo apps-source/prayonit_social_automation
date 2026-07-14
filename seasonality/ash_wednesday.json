@@ -1,0 +1,23 @@
+{
+  "name": "Ash Wednesday",
+  "date_rule": {
+    "type": "easter_relative",
+    "offset_days": -46
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "fresh_start",
+    "guilt",
+    "forgiveness"
+  ],
+  "suggested_angles": [
+    "reflection",
+    "repentance"
+  ],
+  "prohibited_tones": [
+    "celebratory"
+  ],
+  "weight_boost": 1.1,
+  "active": true
+}

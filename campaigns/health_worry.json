@@ -1,0 +1,72 @@
+{
+  "name": "Health Worry",
+  "goal": "Reach people worried about their health, without medical claims.",
+  "pain_point": "worrying about your health and not knowing how to pray about it",
+  "emotional_promise": "a guided way to bring health worries honestly to God",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you worrying about your health and not knowing how to pray about it?",
+    "What if a guided way to bring health worries honestly to God was one tap away?",
+    "You don't have to keep worrying about your health and not knowing how to pray about it alone.",
+    "There's a simple way through worrying about your health and not knowing how to pray about it."
+  ],
+  "body_angles": [
+    "Prayonit meets you in worrying about your health and not knowing how to pray about it with a guided way to bring health worries honestly to God.",
+    "No pressure, no perfect words. Just a guided way to bring health worries honestly to God, built around today.",
+    "Turn worrying about your health and not knowing how to pray about it into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone worrying about your health and not knowing how to pray about it, and show how Prayonit gives them a guided way to bring health worries honestly to God."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about worrying about your health and not knowing how to pray about it, then a quick line about a guided way to bring health worries honestly to God."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about worrying about your health and not knowing how to pray about it, ending with a guided way to bring health worries honestly to God."
+  ],
+  "thread_topics": [
+    "what it's actually like worrying about your health and not knowing how to pray about it",
+    "why a guided way to bring health worries honestly to God matters more than perfect words",
+    "small steps that help with worrying about your health and not knowing how to pray about it"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "retiree",
+    "caregiver"
+  ],
+  "weight": 0.8,
+  "active": true
+}

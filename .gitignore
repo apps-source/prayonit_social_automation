@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+output/
+*.pyc
+.DS_Store
+.venv_old/
+.pytest_cache/
+.vscode/
+logs/
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+assets/backgrounds/
+assets/motion_backgrounds/
+data/recent_theology_components.json
+assets/branding/Download-on-the-App-Store-2/

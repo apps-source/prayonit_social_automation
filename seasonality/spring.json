@@ -1,0 +1,24 @@
+{
+  "name": "Spring",
+  "date_rule": {
+    "type": "season",
+    "months": [
+      3,
+      4,
+      5
+    ]
+  },
+  "lead_days": 0,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "fresh_start",
+    "hope"
+  ],
+  "suggested_angles": [
+    "renewal",
+    "growth"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

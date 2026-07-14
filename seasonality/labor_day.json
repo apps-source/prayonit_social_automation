@@ -1,0 +1,22 @@
+{
+  "name": "Labor Day",
+  "date_rule": {
+    "type": "nth_weekday",
+    "month": 9,
+    "weekday": 0,
+    "n": 1
+  },
+  "lead_days": 2,
+  "follow_days": 0,
+  "eligible_campaigns": [
+    "job_stress",
+    "burnout"
+  ],
+  "suggested_angles": [
+    "rest",
+    "work-life balance"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.0,
+  "active": true
+}

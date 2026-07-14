@@ -1,0 +1,19 @@
+{
+  "name": "Micro Story",
+  "description": "Tell a tiny, relatable one-line story, then the app.",
+  "structure": [
+    "micro_story",
+    "solution",
+    "cta"
+  ],
+  "headline_guidance": "Keep the headline under 9 words and aligned to this formula's structure.",
+  "body_guidance": "Keep body copy under 16 words; follow the formula's structure in order.",
+  "caption_guidance": "Expand the same structure conversationally per platform; end with a download CTA.",
+  "story_guidance": "Compress to a headline and CTA only; skip intermediate structure steps.",
+  "avoid": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ]
+}

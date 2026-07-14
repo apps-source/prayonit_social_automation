@@ -1,0 +1,70 @@
+{
+  "name": "Feature: Journaling",
+  "goal": "Highlight the journaling capability.",
+  "pain_point": "wanting to reflect on your prayers but never actually writing it down",
+  "emotional_promise": "a simple way to journal your prayer experience afterward",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you wanting to reflect on your prayers but never actually writing it down?",
+    "What if a simple way to journal your prayer experience afterward was one tap away?",
+    "You don't have to keep wanting to reflect on your prayers but never actually writing it down alone.",
+    "There's a simple way through wanting to reflect on your prayers but never actually writing it down."
+  ],
+  "body_angles": [
+    "Prayonit meets you in wanting to reflect on your prayers but never actually writing it down with a simple way to journal your prayer experience afterward.",
+    "No pressure, no perfect words. Just a simple way to journal your prayer experience afterward, built around today.",
+    "Turn wanting to reflect on your prayers but never actually writing it down into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone wanting to reflect on your prayers but never actually writing it down, and show how Prayonit gives them a simple way to journal your prayer experience afterward."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about wanting to reflect on your prayers but never actually writing it down, then a quick line about a simple way to journal your prayer experience afterward."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about wanting to reflect on your prayers but never actually writing it down, ending with a simple way to journal your prayer experience afterward."
+  ],
+  "thread_topics": [
+    "what it's actually like wanting to reflect on your prayers but never actually writing it down",
+    "why a simple way to journal your prayer experience afterward matters more than perfect words",
+    "small steps that help with wanting to reflect on your prayers but never actually writing it down"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian"
+  ],
+  "weight": 0.8,
+  "active": true
+}

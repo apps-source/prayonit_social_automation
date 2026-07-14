@@ -1,0 +1,71 @@
+{
+  "name": "Repetitive Prayer",
+  "goal": "Reach people stuck saying the same prayer every time.",
+  "pain_point": "repeating the same tired prayer every single day",
+  "emotional_promise": "fresh, specific prayers that actually fit today",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you repeating the same tired prayer every single day?",
+    "What if fresh, specific prayers that actually fit today was one tap away?",
+    "You don't have to keep repeating the same tired prayer every single day alone.",
+    "There's a simple way through repeating the same tired prayer every single day."
+  ],
+  "body_angles": [
+    "Prayonit meets you in repeating the same tired prayer every single day with fresh, specific prayers that actually fit today.",
+    "No pressure, no perfect words. Just fresh, specific prayers that actually fit today, built around today.",
+    "Turn repeating the same tired prayer every single day into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone repeating the same tired prayer every single day, and show how Prayonit gives them fresh, specific prayers that actually fit today."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about repeating the same tired prayer every single day, then a quick line about fresh, specific prayers that actually fit today."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about repeating the same tired prayer every single day, ending with fresh, specific prayers that actually fit today."
+  ],
+  "thread_topics": [
+    "what it's actually like repeating the same tired prayer every single day",
+    "why fresh, specific prayers that actually fit today matters more than perfect words",
+    "small steps that help with repeating the same tired prayer every single day"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "general_christian",
+    "returning_to_faith"
+  ],
+  "weight": 1.0,
+  "active": true
+}

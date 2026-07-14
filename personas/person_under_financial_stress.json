@@ -1,0 +1,19 @@
+{
+  "name": "Person Under Financial Stress",
+  "description": "Someone anxious about money.",
+  "concerns": [
+    "financial uncertainty",
+    "shame around money"
+  ],
+  "preferred_tone": "empathetic, non-judgmental",
+  "avoid": [
+    "Do not diagnose or label the viewer (e.g. do not say 'you have anxiety').",
+    "Use feeling-based language such as 'feeling overwhelmed?' instead of clinical claims."
+  ],
+  "compatible_campaigns": [
+    "financial_stress",
+    "job_stress"
+  ],
+  "weight": 0.8,
+  "active": true
+}

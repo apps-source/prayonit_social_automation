@@ -1,0 +1,65 @@
+# Prayonit brand configuration (Phase 1A).
+#
+# This file is the first step of the multi-brand migration. It intentionally
+# points at the EXISTING, unmoved project locations (brand/, campaigns/,
+# formulas/, personas/, seasonality/, assets/) so that Phase 1A introduces
+# only a configuration-loading layer, with zero file moves and zero behavior
+# changes. All paths below are relative to the project root and are resolved
+# to absolute paths by config.py.
+#
+# Do not add secrets, API keys, or Buffer channel IDs to this file. Those
+# remain in environment variables (.env) only.
+
+brand:
+  id: "prayonit"
+  name: "Prayonit"
+  filename_prefix: "prayonit"
+
+assets:
+  logo_path: "assets/branding/prayonit_logo.png"
+  app_store_badge_path: "assets/branding/app_store_badge.png"
+  google_play_badge_path: "assets/branding/google_play_badge.png"
+  backgrounds_path: "assets/backgrounds"
+  motion_backgrounds_path: "assets/motion_backgrounds"
+
+content:
+  brand_rules_path: "brand/brand_rules.json"
+  theology_actions_path: "brand/theology_actions.json"
+  campaigns_dir: "campaigns"
+  formulas_dir: "formulas"
+  personas_dir: "personas"
+  seasonality_dir: "seasonality"
+
+storage:
+  supabase_bucket: "prayonit-social-backgrounds"
+
+database:
+  path: "prayonit_marketing.db"
+
+tracking:
+  base_url: "https://prayonit.nextwavestudiosapp.com"
+
+output:
+  filename_prefix: "prayonit"
+
+# ---------------------------------------------------------------------
+# Phase 1B: locked invitation-first Prayonit messaging.
+#
+# Brand principle: Prayonit does not lead by asking people to download an
+# app. Prayonit invites people into a moment with God. The primary visual
+# CTA (Feed + Story buttons) and every platform caption ending must use
+# this invitation-first language instead of a direct "download the app"
+# instruction.
+#
+# reel_cta / tiktok_cta are stored here for future use only; Reels/TikTok
+# publishing is not implemented or wired into the pipeline in this phase.
+# ---------------------------------------------------------------------
+copy:
+  primary_cta: "COME PRAY WITH ME"
+  facebook_cta: "Come pray with me."
+  instagram_cta: "Come pray with me.\nLink in bio."
+  threads_cta: "Come pray with me."
+  story_cta: "COME PRAY WITH ME"
+  reel_cta: "Come pray with me.\nLink in bio."
+  tiktok_cta: "Come pray with me.\nLink in bio."
+  destination_url: "https://prayonit.nextwavestudiosapp.com"

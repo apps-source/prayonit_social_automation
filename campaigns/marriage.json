@@ -1,0 +1,70 @@
+{
+  "name": "Marriage",
+  "goal": "Reach couples wanting to pray together or individually.",
+  "pain_point": "wanting to pray more for your marriage but not knowing where to start",
+  "emotional_promise": "guided prayer prompts for your marriage, made simple",
+  "prohibited_claims": [
+    "Do not claim Prayonit guarantees a spiritual, emotional, or medical outcome.",
+    "Do not claim Prayonit replaces church, clergy, therapy, or medical care.",
+    "Do not use fake statistics, fake testimonials, or fake user counts.",
+    "Do not imply the app knows God's will or speaks with divine authority."
+  ],
+  "hooks": [
+    "Are you wanting to pray more for your marriage but not knowing where to start?",
+    "What if guided prayer prompts for your marriage, made simple was one tap away?",
+    "You don't have to keep wanting to pray more for your marriage but not knowing where to start alone.",
+    "There's a simple way through wanting to pray more for your marriage but not knowing where to start."
+  ],
+  "body_angles": [
+    "Prayonit meets you in wanting to pray more for your marriage but not knowing where to start with guided prayer prompts for your marriage, made simple.",
+    "No pressure, no perfect words. Just guided prayer prompts for your marriage, made simple, built around today.",
+    "Turn wanting to pray more for your marriage but not knowing where to start into a real, guided moment with God."
+  ],
+  "ctas": [
+    "Download Prayonit today.",
+    "Try Prayonit free right now.",
+    "Get your prayer in Prayonit."
+  ],
+  "story_hooks": [
+    "Feeling it right now?",
+    "You're not alone in this.",
+    "There's a simple next step."
+  ],
+  "facebook_angles": [
+    "Talk directly to someone wanting to pray more for your marriage but not knowing where to start, and show how Prayonit gives them guided prayer prompts for your marriage, made simple."
+  ],
+  "instagram_angles": [
+    "Short, punchy visual hook about wanting to pray more for your marriage but not knowing where to start, then a quick line about guided prayer prompts for your marriage, made simple."
+  ],
+  "threads_angles": [
+    "Conversational, first-person-feeling tone about wanting to pray more for your marriage but not knowing where to start, ending with guided prayer prompts for your marriage, made simple."
+  ],
+  "thread_topics": [
+    "what it's actually like wanting to pray more for your marriage but not knowing where to start",
+    "why guided prayer prompts for your marriage, made simple matters more than perfect words",
+    "small steps that help with wanting to pray more for your marriage but not knowing where to start"
+  ],
+  "instagram_hashtags": [
+    "#Prayonit",
+    "#PrayerApp",
+    "#ChristianApp",
+    "#FaithJourney",
+    "#PrayerLife",
+    "#DailyPrayer",
+    "#GodFirst",
+    "#ScriptureDaily"
+  ],
+  "threads_hashtags": [
+    "#Prayonit",
+    "#PrayerLife"
+  ],
+  "eligible_slots": [
+    "morning",
+    "evening"
+  ],
+  "eligible_personas": [
+    "married_couple"
+  ],
+  "weight": 0.8,
+  "active": true
+}

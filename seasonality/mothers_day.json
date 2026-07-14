@@ -1,0 +1,23 @@
+{
+  "name": "Mothers Day",
+  "date_rule": {
+    "type": "nth_weekday",
+    "month": 5,
+    "weekday": 6,
+    "n": 2
+  },
+  "lead_days": 3,
+  "follow_days": 1,
+  "eligible_campaigns": [
+    "prayer_for_family",
+    "prayer_for_children",
+    "gratitude"
+  ],
+  "suggested_angles": [
+    "motherhood",
+    "family"
+  ],
+  "prohibited_tones": [],
+  "weight_boost": 1.2,
+  "active": true
+}
