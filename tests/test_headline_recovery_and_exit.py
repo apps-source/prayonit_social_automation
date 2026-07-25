@@ -95,6 +95,47 @@ def test_duplicate_headline_is_replaced_by_next_valid_candidate():
     assert recovered != ordered[0]
 
 
+def test_recovery_shortens_original_headline_and_preserves_topic():
+    # A too-long friendship-themed headline should be recovered by
+    # shortening it (preserving the friendship topic), not by pulling an
+    # unrelated headline from the generic "purpose" fallback pool.
+    original = "Losing touch with your old friends and feeling distant from people you used to be close to?"
+    recovered = creative_engine_v3.select_recovered_headline(
+        slot="morning",
+        territory="purpose",
+        date_key="2026-07-12",
+        run_id="run-friendship",
+        recent_headlines=[],
+        original_headline=original,
+    )
+    assert recovered is not None
+    assert "friend" in recovered.lower()
+    # None of the unrelated "purpose" pool headlines (about direction/
+    # clarity/next steps) should have been substituted in.
+    for pool_headline in creative_engine_v3.deterministic_fallback_candidates(
+        slot="morning", territory="purpose", date_key="2026-07-12", run_id="run-friendship"
+    ):
+        assert recovered != pool_headline
+
+
+def test_recovery_falls_back_to_pool_when_shortened_original_still_invalid():
+    # An empty/invalid original_headline cannot be shortened into anything
+    # valid, so recovery must fall back to the deterministic pool exactly
+    # as before.
+    ordered = creative_engine_v3.deterministic_fallback_candidates(
+        slot="morning", territory="burnout", date_key="2026-07-12", run_id="run-empty-original"
+    )
+    recovered = creative_engine_v3.select_recovered_headline(
+        slot="morning",
+        territory="burnout",
+        date_key="2026-07-12",
+        run_id="run-empty-original",
+        recent_headlines=[],
+        original_headline="",
+    )
+    assert recovered == ordered[0]
+
+
 def test_failure_reason_mapping_returns_other_bucket():
     reason = creative_engine_v3.identify_headline_failure_reason(
         headline="Valid sounding headline",
@@ -113,8 +154,14 @@ def test_failure_reason_mapping_returns_other_bucket():
 
 def test_production_generic_headline_recovered_and_buffer_allowed(isolated_database, monkeypatch):
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
-    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode: None)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
+    # This test predates Phase 2A video publishing; keep it isolated from
+    # the developer's local .env (which may set VIDEO_ENABLED/
+    # VIDEO_PUBLISH_ENABLED=true for manual dry-run testing) since video
+    # generation/upload is not what this test is validating.
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_PUBLISH_ENABLED", False)
 
     monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())
     monkeypatch.setattr(prayonit_social, "list_backgrounds", lambda supabase: ["bg.jpg"])
@@ -160,7 +207,7 @@ def test_production_generic_headline_recovered_and_buffer_allowed(isolated_datab
 
 def test_failed_recovery_blocks_and_returns_nonzero(isolated_database, monkeypatch):
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
-    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode: None)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
 
     monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())
@@ -220,7 +267,7 @@ def test_main_exit_nonzero_when_cmd_run_nonzero(monkeypatch):
 
 def test_testmode_never_posts(isolated_database, monkeypatch):
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", True)
-    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode: None)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
 
     monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())

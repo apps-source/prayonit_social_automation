@@ -5,7 +5,7 @@ import config
 def test_brand_rules_json_loads():
     rules = config.load_brand_rules()
     assert rules["brand_name"] == "Prayonit"
-    assert rules["preferred_cta"] == "Start your 14-day free trial."
+    assert rules["preferred_cta"] == "Come pray with me."
     assert "core_features" in rules
     assert isinstance(rules["core_features"], list)
     assert len(rules["core_features"]) > 0

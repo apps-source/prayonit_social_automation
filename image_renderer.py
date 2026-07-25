@@ -665,8 +665,11 @@ def compose_ad(background: Image.Image, copy: Dict[str, str]) -> Image.Image:
     )
     element_boxes["cta"] = (int(x1), int(button_y1), int(x2), int(button_y2))
 
-    # G. Trial-support text immediately below the button.
-    trial_support = copy.get("trial_support", "Start your 14-day free trial today.")
+    # G. Destination-support text immediately below the button (website-first
+    # funnel: "Start your prayer at\nprayonit.app"). Layout, font, and
+    # position are unchanged from the prior trial-support line; only the
+    # text content is now config-driven destination copy.
+    trial_support = copy.get("visual_destination_text", config.VISUAL_DESTINATION_TEXT)
     trial_font = ImageFont.truetype(bold_path, int(28 * 1.08))
     trial_box = draw.textbbox((0, 0), trial_support, font=trial_font)
     trial_x = (canvas_width - (trial_box[2] - trial_box[0])) / 2
@@ -1064,10 +1067,12 @@ def compose_story_ad(background: Image.Image, copy: Dict[str, str]) -> Image.Ima
     y = button_y2
     element_boxes["cta"] = (int(x1), int(button_y1), int(x2), int(button_y2))
 
-    # G. Trial-support text immediately below the button.
+    # G. Destination-support text immediately below the button (website-first
+    # funnel: "Start your prayer at\nprayonit.app"). Layout/font unchanged;
+    # only the text content is now config-driven destination copy.
     gap_cta_trial = 27  # story: 25-30 px
     trial_top = y + gap_cta_trial
-    story_trial = copy.get("story_trial_support", "Start your 14-day free trial.")
+    story_trial = copy.get("story_destination_text", config.STORY_DESTINATION_TEXT)
     trial_font = ImageFont.truetype(bold_path, int(trial_font.size * STORY_TRIAL_FONT_SCALE))
     trial_box = draw_centered_story(
         story_trial,
@@ -1200,6 +1205,28 @@ def upload_generated(image_path: Path, prefix: str, supabase_client: Any) -> Tup
             remote_path,
             image_file,
             {"content-type": "image/jpeg", "upsert": "false"},
+        )
+
+    return remote_path, public_url(remote_path)
+
+
+def upload_generated_video(video_path: Path, prefix: str, supabase_client: Any) -> Tuple[str, str]:
+    """Upload a generated motion video to the same Supabase bucket used for
+    images, under a video-specific prefix. Mirrors upload_generated() above
+    (same bucket, same public_url() helper, same timestamped-filename
+    pattern) so Buffer video posts can reuse the existing upload/public-URL
+    machinery instead of a separate storage path.
+    """
+    from datetime import datetime, timezone
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    remote_path = f"{prefix}/prayonit-reel-{timestamp}.mp4"
+
+    with video_path.open("rb") as video_file:
+        supabase_client.storage.from_(config.SUPABASE_BUCKET).upload(
+            remote_path,
+            video_file,
+            {"content-type": "video/mp4", "upsert": "false"},
         )
 
     return remote_path, public_url(remote_path)

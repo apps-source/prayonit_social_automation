@@ -78,18 +78,25 @@ _copy_section = BRAND_CONFIG.get("copy", {}) or {}
 BRAND_NAME = _brand_section.get("name", "Prayonit")
 BRAND_FILENAME_PREFIX = _brand_section.get("filename_prefix", "prayonit")
 
-# ---------- Phase 1B: locked invitation-first Prayonit CTA copy ----------
+# ---------- Phase 1B/1C: locked invitation-first Prayonit CTA copy ----------
 # Loaded from brands/<brand>/brand.yaml "copy" section. These are the only
 # approved CTA strings for the visual Feed/Story button and per-platform
-# caption endings. reel_cta/tiktok_cta are stored for future use only;
-# Reels/TikTok publishing is not implemented in this phase.
+# caption endings. The primary funnel is now website-first: social post ->
+# interactive prayer website (prayonit.app) -> app download later.
+# reel_cta/tiktok_cta are stored for future use only; Reels/TikTok
+# publishing is not implemented in this phase.
 PRIMARY_CTA = _copy_section.get("primary_cta", "COME PRAY WITH ME")
+VISUAL_DESTINATION_TEXT = _copy_section.get("visual_destination_text", "Start your prayer at\nprayonit.app")
 FACEBOOK_CTA = _copy_section.get("facebook_cta", "Come pray with me.")
 INSTAGRAM_CTA = _copy_section.get("instagram_cta", "Come pray with me.\nLink in bio.")
 THREADS_CTA = _copy_section.get("threads_cta", "Come pray with me.")
 STORY_CTA = _copy_section.get("story_cta", "COME PRAY WITH ME")
-REEL_CTA = _copy_section.get("reel_cta", "Come pray with me.\nLink in bio.")
-TIKTOK_CTA = _copy_section.get("tiktok_cta", "Come pray with me.\nLink in bio.")
+STORY_DESTINATION_TEXT = _copy_section.get("story_destination_text", "Start your prayer at\nprayonit.app")
+REEL_CTA = _copy_section.get("reel_cta", "COME PRAY WITH ME")
+REEL_DESTINATION_TEXT = _copy_section.get("reel_destination_text", "Link in bio")
+TIKTOK_CTA = _copy_section.get("tiktok_cta", "COME PRAY WITH ME")
+TIKTOK_DESTINATION_TEXT = _copy_section.get("tiktok_destination_text", "Link in bio")
+DESTINATION_URL = _copy_section.get("destination_url", "https://prayonit.app")
 
 # ---------- Brand content locations (from brand.yaml, resolved to absolute paths) ----------
 BRAND_RULES_PATH = _resolve_path(_content_section.get("brand_rules_path", "brand/brand_rules.json"))
@@ -110,6 +117,8 @@ BRAND_ASSETS_DIR = PROJECT_ROOT / "assets" / "branding"
 LOGO_PATH = _resolve_path(_assets_section.get("logo_path", "assets/branding/prayonit_logo.png"))
 APP_STORE_BADGE_PATH = _resolve_path(_assets_section.get("app_store_badge_path", "assets/branding/app_store_badge.png"))
 GOOGLE_PLAY_BADGE_PATH = _resolve_path(_assets_section.get("google_play_badge_path", "assets/branding/google_play_badge.png"))
+MOTION_BACKGROUNDS_DIR = _resolve_path(_assets_section.get("motion_backgrounds_path", "assets/motion_backgrounds"))
+LONG_FORM_VIDEO_DIR = _resolve_path(_assets_section.get("long_form_videos_path", "assets/videos/long"))
 
 # ---------- Creative Engine v2: component recency tracking ----------
 # Lightweight local recency tracker for theology_actions.json component
@@ -125,8 +134,14 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 SUPABASE_BUCKET = os.getenv("SUPABASE_BUCKET", _storage_section.get("supabase_bucket", "prayonit-social-backgrounds"))
 
 # ---------- Gemini ----------
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+LEGACY_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_API_KEY_PRIMARY = os.getenv("GEMINI_API_KEY_PRIMARY", "").strip() or LEGACY_GEMINI_API_KEY
+GEMINI_API_KEY = GEMINI_API_KEY_PRIMARY
+GEMINI_API_KEY_SECONDARY = os.getenv("GEMINI_API_KEY_SECONDARY", "").strip() or GEMINI_API_KEY_PRIMARY
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+CONTENT_MODEL_PRIMARY = os.getenv("CONTENT_MODEL_PRIMARY", GEMINI_MODEL).strip() or GEMINI_MODEL
+CONTENT_MODEL_SECONDARY = os.getenv("CONTENT_MODEL_SECONDARY", "gemini-2.5-flash").strip()
+CONTENT_MODEL_TERTIARY = os.getenv("CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite").strip()
 
 # ---------- Buffer ----------
 BUFFER_API_KEY = os.getenv("BUFFER_API_KEY", "")
@@ -135,6 +150,7 @@ BUFFER_ENDPOINT = "https://api.buffer.com"
 FACEBOOK_CHANNEL_ID = os.getenv("BUFFER_FACEBOOK_CHANNEL_ID", "")
 INSTAGRAM_CHANNEL_ID = os.getenv("BUFFER_INSTAGRAM_CHANNEL_ID", "")
 THREADS_CHANNEL_ID = os.getenv("BUFFER_THREADS_CHANNEL_ID", "")
+TIKTOK_CHANNEL_ID = os.getenv("BUFFER_TIKTOK_CHANNEL_ID", "")
 
 # Optional Threads post metadata (Buffer GraphQL ThreadsPostMetadataInput).
 # Left blank by default; only included in the Buffer payload when non-empty.
@@ -148,6 +164,56 @@ METRICS_COOLDOWN_HOURS = int(os.getenv("METRICS_COOLDOWN_HOURS", "12"))
 # Start safely. TEST_MODE=true creates images but does not publish or upload.
 TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
 
+# ---------- Preview mode ----------
+# PREVIEW_MODE=true uses the real Gemini generation path (generate_ad_copy(),
+# including the full Creative Brief / Weekly Rhythm / creative library) to
+# produce the exact content production would create, and renders local
+# preview images/videos exactly like TEST_MODE -- but never uploads to
+# Supabase, never calls Buffer, never publishes or schedules posts, and
+# never writes production tracking records. Has no effect when TEST_MODE is
+# true (TEST_MODE's offline generate_local_ad_copy() path always takes
+# priority). Defaults to false so existing behavior is unchanged unless
+# explicitly opted in.
+PREVIEW_MODE = os.getenv("PREVIEW_MODE", "false").strip().lower() == "true"
+
+
+# ---------- Motion video (Phase: dynamic-video integration, local-only) ----------
+# VIDEO_ENABLED=true generates a local motion video (using the same ad_copy
+# as Feed/Story) in addition to the existing images. Video is never
+# uploaded or queued to Buffer in this phase, in either TEST_MODE or
+# production. Defaults to false so existing behavior is unchanged unless
+# explicitly opted in.
+VIDEO_ENABLED = os.getenv("VIDEO_ENABLED", "false").strip().lower() == "true"
+
+# ---------- Phase 2A: video publishing (Facebook Reel / Instagram Reel / TikTok) ----------
+# VIDEO_PUBLISH_ENABLED=true additionally uploads the generated motion video
+# and queues Facebook Reel, Instagram Reel, and TikTok posts to Buffer.
+# Has no effect unless VIDEO_ENABLED is also true (no video is generated to
+# publish otherwise). TEST_MODE=true always prevents any upload/Buffer call
+# regardless of this flag, identical to the existing image-publishing
+# safety behavior. Defaults to false so existing behavior is unchanged
+# unless explicitly opted in.
+VIDEO_PUBLISH_ENABLED = os.getenv("VIDEO_PUBLISH_ENABLED", "false").strip().lower() == "true"
+
+# ---------- Long-form voiceover (Phase: Gemini TTS / local-only rollout) ----------
+# Voice is disabled by default so the existing long-form compositor stays
+# silent unless explicitly opted in. Short-form rendering is unaffected.
+VOICE_ENABLED = os.getenv("VOICE_ENABLED", "false").strip().lower() == "true"
+VOICE_PROVIDER = os.getenv("VOICE_PROVIDER", "gemini").strip().lower() or "gemini"
+VOICE_MODEL = os.getenv("VOICE_MODEL", "gemini-3.1-flash-tts-preview").strip() or "gemini-3.1-flash-tts-preview"
+VOICE_MODEL_PRIMARY = os.getenv("VOICE_MODEL_PRIMARY", "gemini-3.1-flash-tts-preview").strip() or "gemini-3.1-flash-tts-preview"
+VOICE_MODEL_SECONDARY = os.getenv("VOICE_MODEL_SECONDARY", "gemini-2.5-flash-preview-tts").strip() or "gemini-2.5-flash-preview-tts"
+VOICE_NAME = os.getenv("VOICE_NAME", "").strip()
+VOICE_NAME_PRAYER = os.getenv("VOICE_NAME_PRAYER", "Orus").strip() or "Orus"
+VOICE_NAME_DEVOTIONAL = os.getenv("VOICE_NAME_DEVOTIONAL", "Orus").strip() or "Orus"
+VOICE_NAME_ENCOURAGEMENT = os.getenv("VOICE_NAME_ENCOURAGEMENT", "Orus").strip() or "Orus"
+VOICE_NAME_ALTERNATE = os.getenv("VOICE_NAME_ALTERNATE", "Charon").strip() or "Charon"
+try:
+    VOICE_TEMPERATURE = float(os.getenv("VOICE_TEMPERATURE", "1").strip() or "1")
+except ValueError:
+    VOICE_TEMPERATURE = 1.0
+VOICE_FALLBACK_ENABLED = os.getenv("VOICE_FALLBACK_ENABLED", "true").strip().lower() == "true"
+
 # ---------- Paths ----------
 OUTPUT_DIR = PROJECT_ROOT / os.getenv("OUTPUT_DIR", "output")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -160,12 +226,16 @@ OUTPUT_IMAGES_DIR = OUTPUT_DIR / "images"
 OUTPUT_IMAGES_FEED_DIR = OUTPUT_IMAGES_DIR / "feed"
 OUTPUT_IMAGES_STORY_DIR = OUTPUT_IMAGES_DIR / "story"
 OUTPUT_VIDEOS_DIR = OUTPUT_DIR / "videos"
+OUTPUT_VIDEOS_LONG_DIR = OUTPUT_VIDEOS_DIR / "long"
+OUTPUT_AUDIO_DIR = OUTPUT_DIR / "audio"
 OUTPUT_PREVIEWS_DIR = OUTPUT_DIR / "previews"
 OUTPUT_TEMP_DIR = OUTPUT_DIR / "temp"
 for _generated_output_dir in (
     OUTPUT_IMAGES_FEED_DIR,
     OUTPUT_IMAGES_STORY_DIR,
     OUTPUT_VIDEOS_DIR,
+    OUTPUT_VIDEOS_LONG_DIR,
+    OUTPUT_AUDIO_DIR,
     OUTPUT_PREVIEWS_DIR,
     OUTPUT_TEMP_DIR,
 ):
@@ -193,6 +263,7 @@ LOCAL_BACKGROUND_DIR = os.getenv("LOCAL_BACKGROUND_DIR", "").strip()
 GENERATED_PREFIX = os.getenv("GENERATED_PREFIX", "generated")
 GENERATED_FEED_PREFIX = f"{GENERATED_PREFIX}/feed"
 GENERATED_STORY_PREFIX = f"{GENERATED_PREFIX}/story"
+GENERATED_VIDEO_PREFIX = f"{GENERATED_PREFIX}/video"
 
 # ---------- Scheduling ----------
 EASTERN_TZ = ZoneInfo("America/New_York")
@@ -228,23 +299,62 @@ HISTORY_PERSONA_RUNS = int(os.getenv("HISTORY_PERSONA_RUNS", "2"))
 HISTORY_CAMPAIGN_FORMULA_DAYS = int(os.getenv("HISTORY_CAMPAIGN_FORMULA_DAYS", "30"))
 
 
-def require_env(test_mode: bool) -> None:
-    """Raise if required environment variables are missing for the current mode."""
+def require_env(test_mode: bool, preview_mode: bool = False) -> None:
+    """Raise if required environment variables are missing for the current mode.
+
+    preview_mode=True still requires a Gemini API key since PREVIEW_MODE uses the real Gemini
+    generation path, but -- like TEST_MODE -- never requires Buffer
+    credentials, since PREVIEW_MODE never calls Buffer.
+    """
     required = [
         "SUPABASE_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
-        "GEMINI_API_KEY",
     ]
-    if not test_mode:
+    if not test_mode and not preview_mode:
         required += [
             "BUFFER_API_KEY",
             "BUFFER_FACEBOOK_CHANNEL_ID",
             "BUFFER_INSTAGRAM_CHANNEL_ID",
-            "BUFFER_THREADS_CHANNEL_ID",
         ]
+        # BUFFER_TIKTOK_CHANNEL_ID is only required when video publishing is
+        # actually enabled (VIDEO_PUBLISH_ENABLED=true); it is never required
+        # when video publishing is disabled, matching the Phase 2A design
+        # where TikTok is one of three video-only destinations queued
+        # alongside Facebook Reel/Instagram Reel.
+        if VIDEO_PUBLISH_ENABLED:
+            required.append("BUFFER_TIKTOK_CHANNEL_ID")
     missing = [name for name in required if not os.getenv(name)]
+    if not get_gemini_primary_api_key():
+        missing.append("Gemini API key")
     if missing:
+        if missing == ["Gemini API key"]:
+            raise RuntimeError(
+                "Missing Gemini API key. Set GEMINI_API_KEY_PRIMARY or legacy GEMINI_API_KEY."
+            )
+        if "Gemini API key" in missing:
+            missing.remove("Gemini API key")
+            missing.append("Gemini API key (set GEMINI_API_KEY_PRIMARY or legacy GEMINI_API_KEY)")
         raise RuntimeError("Missing environment variables: " + ", ".join(missing))
+
+
+def get_gemini_primary_api_key() -> str:
+    if "GEMINI_API_KEY_PRIMARY" in os.environ:
+        primary_override = os.getenv("GEMINI_API_KEY_PRIMARY", "").strip()
+    else:
+        primary_override = GEMINI_API_KEY_PRIMARY
+    if "GEMINI_API_KEY" in os.environ:
+        legacy_key = os.getenv("GEMINI_API_KEY", "").strip()
+    else:
+        legacy_key = LEGACY_GEMINI_API_KEY
+    return primary_override or legacy_key
+
+
+def get_gemini_secondary_api_key() -> str:
+    if "GEMINI_API_KEY_SECONDARY" in os.environ:
+        secondary_override = os.getenv("GEMINI_API_KEY_SECONDARY", "").strip()
+    else:
+        secondary_override = GEMINI_API_KEY_SECONDARY
+    return secondary_override or get_gemini_primary_api_key()
 
 
 def validate_destination_config() -> None:

@@ -1,0 +1,177 @@
+[
+  {
+    "name": "Recognition",
+    "psychology": "The brain prioritizes anything that mirrors its own internal monologue. Seeing your exact thought externalized creates an instant \"how did they know that\" reaction.",
+    "best_time": "Morning, late night",
+    "emotions": ["anxiety", "exhaustion", "overwhelm"],
+    "example": "You woke up tired of being tired."
+  },
+  {
+    "name": "Curiosity",
+    "psychology": "Open loops (the Zeigarnik effect) keep the brain engaged until resolved — viewers watch to close the gap.",
+    "best_time": "Midday",
+    "emotions": ["curiosity", "discouragement"],
+    "example": "There's one verse God keeps repeating and most people miss it."
+  },
+  {
+    "name": "Question",
+    "psychology": "Direct questions bypass passive scrolling because the brain automatically tries to answer, even silently.",
+    "best_time": "Any",
+    "emotions": ["reflection", "uncertainty"],
+    "example": "When did you stop believing things could get better?"
+  },
+  {
+    "name": "Relief",
+    "psychology": "Names the tension first, then offers release — the brain rewards resolution with a dopamine dip, which people associate with the content itself.",
+    "best_time": "Evening",
+    "emotions": ["anxiety", "burnout"],
+    "example": "You don't have to fix everything before you rest tonight."
+  },
+  {
+    "name": "Identity",
+    "psychology": "Statements that speak to who someone *is* (not what they did) hit deeper and are more shareable — people share things that define them.",
+    "best_time": "Morning",
+    "emotions": ["hope", "belonging"],
+    "example": "You are not the mistake you keep replaying."
+  },
+  {
+    "name": "Validation",
+    "psychology": "Reduces shame by confirming a feeling is normal and shared, which lowers defensiveness and increases trust.",
+    "best_time": "Evening, late night",
+    "emotions": ["guilt", "loneliness"],
+    "example": "It's okay that today wasn't a 'good Christian' day."
+  },
+  {
+    "name": "Hope",
+    "psychology": "Hope activates approach-motivation in the brain (moving toward something) rather than avoidance, which increases watch-through and saves.",
+    "best_time": "Morning",
+    "emotions": ["hope", "renewal"],
+    "example": "This isn't the chapter where it ends."
+  },
+  {
+    "name": "Fear (Handled Gently)",
+    "psychology": "Naming a quiet fear out loud reduces its power — but must always resolve toward safety, never linger in dread.",
+    "best_time": "Late night",
+    "emotions": ["fear", "worry"],
+    "example": "What if the thing you're afraid of never happens?"
+  },
+  {
+    "name": "Gratitude",
+    "psychology": "Gratitude content triggers a mood contrast — viewers notice what they've been ignoring, which creates a small positive jolt.",
+    "best_time": "Evening, Sunday",
+    "emotions": ["gratitude", "peace"],
+    "example": "Name one thing that didn't fall apart today."
+  },
+  {
+    "name": "Reflection",
+    "psychology": "Slower pacing signals safety, inviting the viewer to actually sit with the content instead of scroll past it.",
+    "best_time": "Evening",
+    "emotions": ["peace", "contemplation"],
+    "example": "Some days aren't for fixing. They're for noticing."
+  },
+  {
+    "name": "Pattern Interrupt",
+    "psychology": "Breaks an expected script (e.g. a \"positive\" opener that flips), forcing a re-read, which increases dwell time — a key algorithmic signal.",
+    "best_time": "Any",
+    "emotions": ["curiosity", "surprise"],
+    "example": "Stop praying for patience. Try this instead."
+  },
+  {
+    "name": "Confession",
+    "psychology": "Vulnerability from the \"narrator\" (unbranded, human voice) invites reciprocal vulnerability from the viewer — this is how trust is built fastest.",
+    "best_time": "Late night",
+    "emotions": ["shame", "honesty"],
+    "example": "I stopped praying for a while. No one really talks about that."
+  },
+  {
+    "name": "Challenge",
+    "psychology": "A gentle dare activates the brain's competence-seeking drive — people like proving something to themselves.",
+    "best_time": "Morning",
+    "emotions": ["motivation", "resolve"],
+    "example": "Try going 60 seconds without checking your phone. Just try."
+  },
+  {
+    "name": "Contrast",
+    "psychology": "Juxtaposing two opposing states (chaos vs. stillness) makes the desired state more emotionally vivid than describing it alone.",
+    "best_time": "Evening",
+    "emotions": ["relief", "longing"],
+    "example": "Your day was loud. This doesn't have to be."
+  },
+  {
+    "name": "Permission",
+    "psychology": "Many people, especially in faith spaces, are waiting for someone to say it's okay to feel a certain way — this releases guilt.",
+    "best_time": "Any",
+    "emotions": ["guilt", "exhaustion"],
+    "example": "You're allowed to be tired of holding it together."
+  },
+  {
+    "name": "Belonging",
+    "psychology": "Loneliness is one of the most universal modern emotions — statements that imply \"you're not the only one\" satisfy a core social need.",
+    "best_time": "Night",
+    "emotions": ["loneliness", "isolation"],
+    "example": "There are people awake right now, feeling exactly what you feel."
+  },
+  {
+    "name": "Memory / Nostalgia",
+    "psychology": "Nostalgia is emotionally warming and lowers psychological defenses, making the viewer more receptive to what follows.",
+    "best_time": "Sunday, evening",
+    "emotions": ["longing", "warmth"],
+    "example": "Remember when prayer felt like talking to a friend, not a task?"
+  },
+  {
+    "name": "Surrender",
+    "psychology": "Names the exhaustion of control directly — for over-functioning, anxious audiences, this is often the most relieving message possible.",
+    "best_time": "Night",
+    "emotions": ["exhaustion", "release"],
+    "example": "You don't have to carry it until you fall asleep."
+  },
+  {
+    "name": "Direct Address",
+    "psychology": "Second-person, present-tense phrasing (\"you\") creates the sensation of being spoken to personally rather than marketed at.",
+    "best_time": "Any",
+    "emotions": ["any"],
+    "example": "If no one's told you today — you're doing better than you think."
+  },
+  {
+    "name": "Micro-Story",
+    "psychology": "A one-line scenario (\"her hands were shaking before the meeting\") activates narrative processing, which is stickier than abstract statements.",
+    "best_time": "Midday",
+    "emotions": ["anxiety", "empathy"],
+    "example": "She sat in the parking lot for ten minutes before going in."
+  },
+  {
+    "name": "Reframe",
+    "psychology": "Takes a negative belief and flips its meaning — this creates a small cognitive \"aha\" that feels like insight, which people want to save and revisit.",
+    "best_time": "Morning",
+    "emotions": ["discouragement", "hope"],
+    "example": "Maybe the waiting isn't punishment. Maybe it's preparation."
+  },
+  {
+    "name": "Universal Truth",
+    "psychology": "Broad statements that feel unmistakably true generate agreement, and agreement is one of the strongest predictors of a share.",
+    "best_time": "Any",
+    "emotions": ["clarity", "peace"],
+    "example": "No one has their whole life figured out. Not even the people who look like they do."
+  },
+  {
+    "name": "Countdown / Urgency (Gentle)",
+    "psychology": "A soft sense of \"this moment matters\" (not sales urgency) increases presence and reduces passive scrolling.",
+    "best_time": "Evening",
+    "emotions": ["presence", "calm"],
+    "example": "You have about 90 seconds before this day is officially over. Spend them here."
+  },
+  {
+    "name": "Second-Person Prayer Voice",
+    "psychology": "Hearing a prayer said *about* you, in second person, feels deeply personal and lowers the barrier to feeling \"prayed over\" instantly.",
+    "best_time": "Night",
+    "emotions": ["peace", "comfort"],
+    "example": "Whatever tonight's worry is — it's allowed to stay outside this moment."
+  },
+  {
+    "name": "Silence / Stillness Invitation",
+    "psychology": "In a feed built on noise, an explicit invitation to stillness is itself a pattern interrupt — it stands out precisely because it asks for less, not more.",
+    "best_time": "Any",
+    "emotions": ["peace", "calm"],
+    "example": "Just for the next ten seconds — nothing to fix, nowhere to be."
+  }
+]

@@ -1,0 +1,62 @@
+{
+  "guiding_principle": "Every post makes someone feel understood before it ever asks them to do something. The ratio should run roughly 80% connection / encouragement to 20% soft invitation.",
+  "connection_to_invitation_ratio": {
+    "connection_encouragement_percent": 80,
+    "soft_invitation_percent": 20
+  },
+  "weekly_themes": {
+    "monday": {
+      "name": "The Reset",
+      "morning_theme": "Naming Sunday-night dread / Monday overwhelm; a grounding, gentle-start message.",
+      "evening_theme": "Validating that the first day back was hard; permission to rest."
+    },
+    "tuesday": {
+      "name": "The Grind",
+      "morning_theme": "Encouragement for the \"unglamorous middle\" of the week — showing up when no one's watching.",
+      "evening_theme": "A reflection prompt on where you noticed God (or peace) in a small moment today."
+    },
+    "wednesday": {
+      "name": "Midweek Mercy",
+      "morning_theme": "A reframe post — turning a common midweek frustration into perspective.",
+      "evening_theme": "Community post — \"What's one thing you're proud of getting through this week so far?\""
+    },
+    "thursday": {
+      "name": "The Honest Day",
+      "morning_theme": "Confession-style post — normalizing doubt, spiritual dryness, or feeling behind.",
+      "evening_theme": "Prayer request post — inviting comments with what people need prayer for."
+    },
+    "friday": {
+      "name": "Exhale",
+      "morning_theme": "Relief/permission post — the week is almost over, it's okay to feel depleted.",
+      "evening_theme": "Gratitude post — naming three small good things from the week."
+    },
+    "saturday": {
+      "name": "Slow Living",
+      "morning_theme": "Stillness/reflection content — no urgency, just presence.",
+      "evening_theme": "Bible verse post, framed conversationally rather than as a scripture lesson."
+    },
+    "sunday": {
+      "name": "Restoration",
+      "morning_theme": "Identity/hope post tied to a fresh start.",
+      "evening_theme": "Soft app-promotion post, framed as \"one small thing to carry into the week.\""
+    }
+  },
+  "recurring_content_types": [
+    {
+      "type": "community_posts",
+      "description": "\"Duet this with the verse that's carried you this year,\" or \"Tag someone who needs to see this today.\""
+    },
+    {
+      "type": "prayer_request_posts",
+      "description": "A simple open comment thread — \"What's weighing on you tonight?\" — moderated with care, never left unanswered by the brand voice."
+    },
+    {
+      "type": "bible_verse_posts",
+      "description": "Presented as a feeling first, verse second — e.g., \"For the nights it feels like too much →\" followed by a verse, never verse-first."
+    },
+    {
+      "type": "soft_app_promotion",
+      "description": "Framed as \"if this helped, there's a place I go every night to put this down\" rather than feature lists or calls to download."
+    }
+  ]
+}

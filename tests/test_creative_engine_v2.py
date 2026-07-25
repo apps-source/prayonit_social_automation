@@ -35,7 +35,6 @@ def _fake_platform_urls():
     return {
         "facebook": "https://example.com/download?t=fb1",
         "instagram": "https://example.com/download?t=ig1",
-        "threads": "https://example.com/download?t=th1",
     }
 
 
@@ -49,7 +48,6 @@ def _fake_ad_copy(**overrides):
         "trial_support": "Start your 14-day free trial today.",
         "facebook_caption": "Feeling overwhelmed tonight? Prayonit can help. Start your 14-day free trial today.",
         "instagram_caption": "Feeling overwhelmed tonight? Prayonit can help.",
-        "threads_caption": "Feeling overwhelmed tonight? Start your 14-day free trial today.",
         "story_headline": "Need Rest?",
         "story_spiritual_action": "Bring it to God.",
         "story_app_benefit": "A guided, personalized prayer for how you feel.",
@@ -66,7 +64,7 @@ def test_all_new_required_keys_present_in_required_keys_tuple():
     for key in (
         "brand_header", "pain_headline", "spiritual_action", "app_benefit",
         "download_cta", "trial_support", "facebook_caption", "instagram_caption",
-        "threads_caption", "story_headline", "story_spiritual_action",
+        "story_headline", "story_spiritual_action",
         "story_app_benefit", "story_download_cta", "story_trial_support",
     ):
         assert key in prompt_builder.REQUIRED_AD_COPY_KEYS
@@ -107,27 +105,30 @@ def test_download_cta_is_always_download_prayonit():
     assert prompt_builder.enforce_download_cta("") == config.PRIMARY_CTA
 
 
-def test_trial_support_falls_back_when_missing_14_day_duration():
+def test_trial_support_falls_back_to_website_first_text_when_trial_language_present():
     result = prompt_builder.enforce_trial_support("Try it free!", config.BRAND_RULES)
-    assert "14-day" in result.lower()
+    assert "prayonit.app" in result.lower()
+    assert "trial" not in result.lower()
+    assert "free" not in result.lower()
 
 
-def test_trial_support_kept_when_already_valid():
-    text = "Start your 14-day free trial today."
+def test_trial_support_kept_when_already_website_first():
+    text = config.VISUAL_DESTINATION_TEXT
     assert prompt_builder.enforce_trial_support(text, config.BRAND_RULES) == text
 
 
-def test_story_trial_support_uses_compact_phrase_fallback():
+def test_story_trial_support_uses_website_first_compact_phrase_fallback():
     result = prompt_builder.enforce_trial_support("free trial!!", config.BRAND_RULES, compact=True)
-    assert "14-day" in result.lower()
-    assert len(result.split()) <= 6
+    assert "prayonit.app" in result.lower()
+    assert "trial" not in result.lower()
 
 
-def test_apply_brand_enforcement_forces_download_cta_and_trial_support():
+def test_apply_brand_enforcement_forces_download_cta_and_website_first_trial_support():
     ad_copy = _fake_ad_copy(download_cta="Try Prayonit", trial_support="free trial")
     enforced = prompt_builder.apply_brand_enforcement(ad_copy, config.BRAND_RULES)
     assert enforced["download_cta"] == config.PRIMARY_CTA
-    assert "14-day" in enforced["trial_support"].lower()
+    assert "prayonit.app" in enforced["trial_support"].lower()
+    assert "trial" not in enforced["trial_support"].lower()
 
 
 # ---------- Theology safety ----------
@@ -286,20 +287,6 @@ def test_instagram_caption_contains_no_raw_url_v2():
     assert "https://" not in captions["instagram"]
 
 
-def test_threads_keeps_url_and_location_metadata(monkeypatch):
-    monkeypatch.setattr(config, "THREADS_LOCATION_NAME", "United States of America")
-    monkeypatch.setattr(config, "THREADS_LOCATION_ID", "12345")
-    selection = _fake_selection()
-    ad_copy = _fake_ad_copy()
-    urls = _fake_platform_urls()
-    captions = prompt_builder.build_platform_captions(ad_copy, selection, urls)
-    assert urls["threads"] in captions["threads"]
-
-    input_data = _capture_buffer_input("threads", "post")
-    assert input_data["metadata"]["threads"]["locationName"] == "United States of America"
-    assert input_data["metadata"]["threads"]["locationId"] == "12345"
-
-
 def test_facebook_remains_unchanged_by_v2_changes():
     input_data = _capture_buffer_input("facebook", "post")
     assert input_data["metadata"]["facebook"] == {"type": "post"}
@@ -319,9 +306,8 @@ def test_every_caption_contains_trial_phrase_at_most_once():
             "Feeling overwhelmed? Start your 14-day free trial today. "
             "Don't wait, start your 14-day free trial now."
         ),
-        threads_caption="Try Prayonit with a 14-day free trial. Start your 14-day free trial today.",
     )
     captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
-    for platform in ("facebook", "instagram", "threads"):
+    for platform in ("facebook", "instagram"):
         lower = captions[platform].lower()
         assert lower.count("14-day") <= 1 or lower.count("trial") <= 1

@@ -16,14 +16,12 @@
   ],
 
   "approved_ctas": [
-    "Start your 14-day free trial.",
-    "Start your free 14-day journey today.",
-    "Try Prayonit with a free 14-day trial.",
-    "Download Prayonit today.",
-    "Begin your prayer journey today."
+    "Come pray with me.",
+    "Start your prayer at prayonit.app",
+    "Link in bio."
   ],
 
-  "preferred_cta": "Start your 14-day free trial.",
+  "preferred_cta": "Come pray with me.",
 
   "voice": {
     "tone": [
@@ -82,15 +80,20 @@
     "Guaranteed results",
     "Try it free today",
     "Download for free",
-    "Try Prayonit free"
+    "Try Prayonit free",
+    "14-day free trial",
+    "Start your free trial",
+    "Download Prayonit",
+    "Install the app",
+    "Get the app"
   ],
 
-  "compact_trial_phrase": "Start your 14-day trial.",
+  "compact_trial_phrase": "Start your prayer at prayonit.app",
 
   "trial_policy": {
     "length": "14 days",
-    "preferred_phrase": "Start your 14-day free trial.",
-    "alternate_phrase": "Try Prayonit with a free 14-day trial."
+    "preferred_phrase": "Start your prayer at prayonit.app",
+    "alternate_phrase": "Come pray with me."
   },
 
   "app_store_links": {

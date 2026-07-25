@@ -9,15 +9,48 @@ from google import genai
 from google.genai import types
 
 import config
+from engines import content_engine
 
-_gemini_client: Optional[genai.Client] = None
+_gemini_clients_by_key: Dict[str, genai.Client] = {}
+_TEMPORARY_GEMINI_ERROR_CODES = ("429", "500", "502", "503", "504")
 
 
-def _get_gemini_client() -> genai.Client:
-    global _gemini_client
-    if _gemini_client is None:
-        _gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
-    return _gemini_client
+def _get_gemini_client(api_key: Optional[str] = None) -> genai.Client:
+    resolved_api_key = api_key or config.get_gemini_primary_api_key()
+    client = _gemini_clients_by_key.get(resolved_api_key)
+    if client is None:
+        client = genai.Client(api_key=resolved_api_key)
+        _gemini_clients_by_key[resolved_api_key] = client
+    return client
+
+
+def _is_temporary_gemini_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(code in message for code in _TEMPORARY_GEMINI_ERROR_CODES)
+
+
+def _get_configured_content_models() -> list[str]:
+    models = []
+    for model in (
+        config.CONTENT_MODEL_PRIMARY,
+        config.CONTENT_MODEL_SECONDARY,
+        config.CONTENT_MODEL_TERTIARY,
+    ):
+        if model and model not in models:
+            models.append(model)
+    return models or [config.GEMINI_MODEL]
+
+
+def _get_content_model_attempt_plan() -> list[tuple[str, str, str]]:
+    models = _get_configured_content_models()
+    primary_key = config.get_gemini_primary_api_key()
+    secondary_key = config.get_gemini_secondary_api_key()
+    attempts = []
+    for index, model_name in enumerate(models):
+        key_label = "primary" if index == 0 or secondary_key == primary_key else "secondary"
+        api_key = primary_key if key_label == "primary" else secondary_key
+        attempts.append((model_name, key_label, api_key))
+    return attempts
 
 
 PRODUCT_FLOW_DESCRIPTION = """
@@ -84,6 +117,437 @@ Time-of-day guidance: this ad will publish this morning, around 8:00 AM.
 """
 
 
+def build_weekly_rhythm_preamble(slot: str) -> str:
+    """Build the "Today's Schedule" block from the Weekly Rhythm content
+    engine and log the resolved theme for verification.
+
+    This is an ADDITIVE content-selection layer only: it does not alter,
+    remove, or replace any existing prompt instructions. If the weekly
+    rhythm config cannot be loaded for any reason, an empty string is
+    returned so prompt generation continues to work exactly as before.
+    """
+    try:
+        todays_content = content_engine.get_todays_content(slot=slot)
+    except Exception as exc:  # pragma: no cover - defensive fallback only
+        print("Weekly Theme: unavailable ({0})".format(exc))
+        return ""
+
+    content_type = todays_content.get("content_type", "")
+    theme = todays_content.get("theme", "")
+    emotion = todays_content.get("emotion", "")
+    hook_style = todays_content.get("hook_style", "")
+    objective = todays_content.get("objective", "")
+
+    print("Weekly Theme:")
+    print(content_type.replace("_", " ").title())
+    print(theme.title())
+    print(hook_style.title())
+
+    return """
+Today's Schedule
+
+Content Type:
+{content_type}
+
+Theme:
+{theme}
+
+Emotion:
+{emotion}
+
+Hook Style:
+{hook_style}
+
+Objective:
+{objective}
+""".format(
+        content_type=content_type.replace("_", " ").title(),
+        theme=theme.title(),
+        emotion=emotion.title(),
+        hook_style=hook_style.title(),
+        objective=objective,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Creative Brief (Weekly Rhythm + Creative Library)
+#
+# This is an ADDITIVE content-selection layer that runs before the existing
+# Gemini prompt. It selects a Life Moment, a Hook Style, and (only when
+# today's rules allow it) an Engagement Prompt or Soft Promotion from the
+# creative library (creative/*.json), then renders a structured "Creative
+# Brief" block that is prepended to the unchanged existing prompt. Nothing
+# below alters the renderer, uploader, Buffer integration, Supabase,
+# image generation, or video generation, and it never replaces or removes
+# any existing prompt instructions — build_prompt() below still appends
+# the full existing prompt unchanged.
+# ---------------------------------------------------------------------------
+
+# Content types (from creative/weekly_rhythm.json) on which it is
+# appropriate to surface an Engagement Prompt or a Soft Promotion.
+_ENGAGEMENT_PROMPT_CONTENT_TYPES = (
+    "prayer_read",
+    "devotional_read",
+    "recognition_engagement",
+    "hope_encouragement",
+    "gratitude_reflection",
+    "night_prayer_or_rest",
+)
+_SOFT_PROMOTION_CONTENT_TYPES = ("app_feature",)
+
+_MORNING_TONE = "Warm and encouraging"
+_EVENING_TONE = "Calm and reflective"
+
+_PRAYER_GUIDANCE_TYPES = {"prayer_read", "night_prayer_or_rest"}
+_DEVOTIONAL_GUIDANCE_TYPES = {"devotional_read", "gratitude_reflection"}
+_ENCOURAGEMENT_GUIDANCE_TYPES = {"hope_encouragement"}
+
+LONG_FORM_OPTIONAL_KEYS = (
+    "long_form_type",
+    "opening_hook",
+    "bridge_line",
+    "script_segments",
+    "closing_line",
+    "engagement_line",
+    "estimated_spoken_seconds",
+)
+
+_LONG_FORM_TYPES = {"prayer", "devotional", "encouragement", "none"}
+
+
+def build_format_specific_guidance(content_type: str) -> str:
+    """Return additive writing guidance for the resolved content type."""
+    if content_type in _PRAYER_GUIDANCE_TYPES:
+        return """
+Format Guidance:
+- Generate an actual complete prayer suitable for approximately 25 to 35 seconds of spoken delivery.
+- Include a short recognition hook.
+- The prayer should feel natural, compassionate, and specific to the Life Moment.
+- Do not turn it into app marketing.
+- End the prayer naturally, such as with "Amen," when appropriate.
+"""
+    if content_type in _DEVOTIONAL_GUIDANCE_TYPES:
+        return """
+Format Guidance:
+- Generate a meaningful devotional reflection suitable for approximately 20 to 30 seconds.
+- Include recognition, comfort, hope, and one clear takeaway.
+- Avoid hard app promotion.
+"""
+    if content_type in _ENCOURAGEMENT_GUIDANCE_TYPES:
+        return """
+Format Guidance:
+- Generate a hope-filled encouragement suitable for approximately 20 to 30 seconds.
+- Focus on reassurance, emotional resolution, and a clear sense of hope.
+- Avoid hard app promotion.
+"""
+    if content_type == "app_feature":
+        return """
+Format Guidance:
+- Preserve the current concise promotional behavior.
+"""
+    if content_type == "recognition_engagement":
+        return """
+Format Guidance:
+- Generate a short relatable recognition message and one natural engagement invitation.
+"""
+    return ""
+
+
+def expected_long_form_type(content_type: str, video_template: str) -> str:
+    """Return the expected long-form type for the resolved content format."""
+    if content_type in _PRAYER_GUIDANCE_TYPES or video_template == "long_prayer":
+        return "prayer"
+    if content_type in _ENCOURAGEMENT_GUIDANCE_TYPES or video_template == "long_encouragement":
+        return "encouragement"
+    if content_type in _DEVOTIONAL_GUIDANCE_TYPES or video_template == "long_devotional":
+        return "devotional"
+    return "none"
+
+
+def build_long_form_defaults(
+    *,
+    content_type: str,
+    video_template: str,
+    duration_seconds: int,
+) -> Dict[str, Any]:
+    """Return safe long-form defaults for the resolved weekly format."""
+    long_form_type = expected_long_form_type(content_type, video_template)
+    estimated_spoken_seconds = duration_seconds if long_form_type != "none" else 8
+    return {
+        "long_form_type": long_form_type,
+        "opening_hook": "",
+        "bridge_line": "",
+        "script_segments": [],
+        "closing_line": "",
+        "engagement_line": "",
+        "estimated_spoken_seconds": estimated_spoken_seconds,
+    }
+
+
+def _looks_like_complete_thought(text: str) -> bool:
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    return stripped[-1] in ".?!"
+
+
+def normalize_long_form_fields(
+    raw_data: Dict[str, Any],
+    *,
+    content_type: str,
+    video_template: str,
+    duration_seconds: int,
+    engagement_prompt_enabled: bool,
+) -> Dict[str, Any]:
+    """Normalize optional long-form fields without breaking old callers."""
+    normalized = build_long_form_defaults(
+        content_type=content_type,
+        video_template=video_template,
+        duration_seconds=duration_seconds,
+    )
+
+    long_form_type = str(raw_data.get("long_form_type", normalized["long_form_type"])).strip().lower()
+    if long_form_type not in _LONG_FORM_TYPES:
+        long_form_type = normalized["long_form_type"]
+    if normalized["long_form_type"] == "none":
+        long_form_type = "none"
+    elif long_form_type == "none":
+        long_form_type = normalized["long_form_type"]
+    normalized["long_form_type"] = long_form_type
+
+    for key in ("opening_hook", "bridge_line", "closing_line", "engagement_line"):
+        value = raw_data.get(key, normalized[key])
+        normalized[key] = str(value).strip() if value is not None else ""
+
+    raw_segments = raw_data.get("script_segments", [])
+    if not isinstance(raw_segments, list):
+        raw_segments = []
+    script_segments = []
+    for segment in raw_segments:
+        text = str(segment).strip()
+        if not text:
+            continue
+        if not _looks_like_complete_thought(text):
+            continue
+        script_segments.append(text)
+
+    expected_segment_count = normalized["long_form_type"] in {"prayer", "devotional", "encouragement"}
+    if normalized["long_form_type"] == "none":
+        script_segments = []
+    elif expected_segment_count and not (2 <= len(script_segments) <= 5):
+        script_segments = []
+    normalized["script_segments"] = script_segments
+
+    estimated = raw_data.get("estimated_spoken_seconds", normalized["estimated_spoken_seconds"])
+    if not isinstance(estimated, int) or not (8 <= estimated <= 35):
+        estimated = normalized["estimated_spoken_seconds"]
+    normalized["estimated_spoken_seconds"] = estimated
+
+    if not engagement_prompt_enabled:
+        normalized["engagement_line"] = ""
+
+    if normalized["long_form_type"] == "prayer" and not normalized["closing_line"]:
+        normalized["closing_line"] = "Amen."
+
+    return normalized
+
+
+def select_life_moment_for_emotion(
+    emotion: str, life_moments: Optional[list] = None
+) -> Optional[Dict[str, Any]]:
+    """Select one Life Moment whose emotions list includes `emotion`
+    (case-insensitive). Falls back to a random moment from the full list
+    if no exact match is found, and to None if the library is empty.
+    """
+    moments = life_moments if life_moments is not None else content_engine.load_life_moments()
+    if not moments:
+        return None
+
+    candidates = [
+        m
+        for m in moments
+        if emotion and emotion.lower() in [e.lower() for e in m.get("emotions", [])]
+    ]
+    if not candidates:
+        candidates = moments
+
+    return random.choice(candidates)
+
+
+def select_hook_for_style(
+    hook_style: str, hook_styles: Optional[list] = None
+) -> Optional[Dict[str, Any]]:
+    """Select the Hook Style entry matching today's rhythm `hook_style`
+    (case-insensitive match against the "name" field). Falls back to a
+    random hook style if no exact match is found, and to None if the
+    library is empty.
+    """
+    hook = content_engine.get_random_hook(style=hook_style, hook_styles=hook_styles)
+    if hook is not None:
+        return hook
+    return content_engine.get_random_hook(hook_styles=hook_styles)
+
+
+def creative_brief_allows_engagement_prompt(content_type: str) -> bool:
+    """Return True when today's content_type permits an Engagement
+    Prompt, per the Weekly Rhythm content rules."""
+    return content_type in _ENGAGEMENT_PROMPT_CONTENT_TYPES
+
+
+def creative_brief_allows_soft_promotion(content_type: str) -> bool:
+    """Return True when today's content_type permits a Soft Promotion,
+    per the Weekly Rhythm content rules."""
+    return content_type in _SOFT_PROMOTION_CONTENT_TYPES
+
+
+def build_creative_brief_data(slot: str) -> Optional[Dict[str, Any]]:
+    """Assemble the structured Creative Brief data for today's rhythm.
+
+    Returns None if the Weekly Rhythm config cannot be loaded, so callers
+    can fail safe without breaking prompt generation.
+    """
+    try:
+        todays_content = content_engine.get_todays_content(slot=slot)
+    except Exception as exc:  # pragma: no cover - defensive fallback only
+        print("Creative Brief: unavailable ({0})".format(exc))
+        return None
+
+    content_type = todays_content.get("content_type", "")
+    theme = todays_content.get("theme", "")
+    emotion = todays_content.get("emotion", "")
+    hook_style_name = todays_content.get("hook_style", "")
+    objective = todays_content.get("objective", "")
+    presentation = content_engine.get_presentation_config(todays_content)
+
+    life_moment = select_life_moment_for_emotion(emotion)
+    hook = select_hook_for_style(hook_style_name)
+
+    engagement_prompt = None
+    if presentation.get("engagement_prompt_enabled"):
+        engagement_prompt = content_engine.get_random_engagement_prompt()
+
+    soft_promotion = None
+    if presentation.get("marketing_enabled"):
+        soft_promotion = content_engine.get_random_soft_promotion()
+
+    tone = _MORNING_TONE if slot != "evening" else _EVENING_TONE
+    emotional_goal = "Help the reader move from feeling {0} toward hope and peace.".format(
+        emotion.lower() if emotion else "burdened"
+    )
+
+    return {
+        "weekly_theme": theme,
+        "content_type": content_type,
+        "objective": objective,
+        "tone": tone,
+        "emotional_goal": emotional_goal,
+        "video_template": presentation["video_template"],
+        "target_duration": presentation["duration_seconds"],
+        "marketing_enabled": presentation["marketing_enabled"],
+        "engagement_prompt_enabled": presentation["engagement_prompt_enabled"],
+        "engagement_prompt_type": presentation["engagement_prompt_type"],
+        "format_guidance": build_format_specific_guidance(content_type),
+        "expected_long_form_type": expected_long_form_type(
+            content_type, presentation["video_template"]
+        ),
+        "life_moment": life_moment,
+        "hook": hook,
+        "engagement_prompt": engagement_prompt,
+        "soft_promotion": soft_promotion,
+    }
+
+
+def build_creative_brief_preamble(slot: str) -> str:
+    """Build the structured "Creative Brief" text block and log the
+    resolved selections for verification.
+
+    This does not replace build_weekly_rhythm_preamble() or any existing
+    prompt content; it is an additional block prepended before the
+    existing Gemini prompt.
+    """
+    brief = build_creative_brief_data(slot)
+    if brief is None:
+        return ""
+
+    life_moment = brief.get("life_moment") or {}
+    hook = brief.get("hook") or {}
+    engagement_prompt = brief.get("engagement_prompt")
+    soft_promotion = brief.get("soft_promotion")
+
+    print("Creative Brief:")
+    print(brief.get("weekly_theme", "").title())
+    print(life_moment.get("moment", ""))
+    print(hook.get("name", ""))
+
+    lines = [
+        "",
+        "Creative Brief",
+        "",
+        "Weekly Theme:",
+        brief.get("weekly_theme", ""),
+        "",
+        "Content Type:",
+        brief.get("content_type", "").replace("_", " ").title(),
+        "",
+        "Video Template:",
+        brief.get("video_template", "").replace("_", " ").title(),
+        "",
+        "Target Duration:",
+        "{0} seconds".format(brief.get("target_duration", "")),
+        "",
+        "Marketing Enabled:",
+        str(brief.get("marketing_enabled", False)).lower(),
+        "",
+        "Expected Long-Form Type:",
+        brief.get("expected_long_form_type", "none"),
+        "",
+        "Engagement Prompt Enabled:",
+        str(brief.get("engagement_prompt_enabled", False)).lower(),
+        "",
+        "Engagement Prompt Type:",
+        brief.get("engagement_prompt_type", ""),
+        "",
+        "Life Moment:",
+        life_moment.get("moment", ""),
+        "",
+        "Hook Style:",
+        hook.get("name", ""),
+        "",
+        "Objective:",
+        brief.get("objective", ""),
+        "",
+        "Tone:",
+        brief.get("tone", ""),
+        "",
+        "Emotional Goal:",
+        brief.get("emotional_goal", ""),
+    ]
+
+    if engagement_prompt:
+        lines += [
+            "",
+            "Engagement Prompt:",
+            engagement_prompt.get("prompt", ""),
+        ]
+
+    if soft_promotion:
+        lines += [
+            "",
+            "Soft Promotion:",
+            soft_promotion.get("text", ""),
+        ]
+
+    format_guidance = brief.get("format_guidance", "")
+    if format_guidance:
+        lines += [
+            "",
+            format_guidance.strip(),
+        ]
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_prompt(
     *,
     post_type: str,
@@ -91,35 +555,64 @@ def build_prompt(
     slot: str,
     tracked_url: str,
 ) -> str:
-    campaign = selection["campaign"]
-    formula = selection.get("formula")
-    persona = selection.get("persona")
+    """Build the full Gemini prompt.
+
+    Creative decisions (what the ad emotionally says and why) now come
+    ONLY from: Weekly Rhythm, Creative Brief (Life Moment, Hook Style,
+    Tone, Objective, Emotional Goal), Brand Brain, and Seasonal Context.
+
+    Legacy Campaign/Persona/Formula/Marketing-Hook/Marketing-CTA fields on
+    `selection` are intentionally NOT read here anymore -- they no longer
+    steer Gemini generation. They are preserved elsewhere in `selection`
+    unchanged (campaign_engine.py, prayonit_social.py, history_store.py,
+    build_platform_captions()'s hashtag selection, and background
+    matching) purely for analytics, QA, reporting, and hashtag/background
+    selection, none of which this function touches.
+    """
     seasonal_context = selection.get("seasonal_context")
     spiritual_action = selection.get("spiritual_action", "Give today's burdens to God in prayer.")
-
-    formula_block = ""
-    if formula:
-        formula_block = f"""
-Use this proven advertising formula as the structural guide (do not label the
-sections in the output, just follow the flow): {formula['name']} -
-{formula['description']}
-Structure: {' -> '.join(formula.get('structure', []))}
-Avoid: {'; '.join(formula.get('avoid', []))}
-"""
-
-    persona_block = ""
-    if persona:
-        persona_block = f"""
-Write with this audience in mind: {persona['name']} - {persona['description']}
-Preferred tone: {persona['preferred_tone']}
-Do not make assumptions about the reader's diagnosis or condition. Avoid: {'; '.join(persona.get('avoid', []))}
-"""
 
     seasonal_block = f"\nSeasonal context to weave in naturally, if relevant: {seasonal_context}\n" if seasonal_context else ""
 
     brand_preamble = build_brand_brain_preamble(config.BRAND_RULES)
+    weekly_rhythm_preamble = build_weekly_rhythm_preamble(slot)
+    creative_brief_preamble = build_creative_brief_preamble(slot)
 
+    # ---- Emotional flow: Life Moment -> Recognition Hook -> Comfort ->
+    # Hope -> Invitation -> Brand Rules -> App Features -> Constraints ----
     return f"""
+{creative_brief_preamble}
+{weekly_rhythm_preamble}
+The Life Moment, Hook Style, Objective, Tone, and Emotional Goal above are
+the single source of truth for this ad's emotional content. Do not invent
+a different pain point, hook, or angle -- build directly on what is given
+above.
+
+The primary goal is NOT to advertise the app. The primary goal is to help
+someone feel understood. If mentioning the app improves the message, do so
+naturally. If it does not, allow the invitation to appear only near the
+end.
+
+Existing short-form fields still power the current Feed and Story outputs.
+The optional long-form fields below are for future long video templates
+only. Keep both layers aligned to the same Life Moment, Hook Style,
+Objective, Tone, Emotional Goal, content type, and target duration. Do
+not let the long-form script suddenly introduce a different topic.
+
+Write toward this emotional arc, in this order: first help the reader feel
+recognized in the Life Moment above (using the given Hook Style). Then
+offer comfort. Then offer hope. Only after comfort and hope have been
+established, offer a gentle invitation to pray together.
+
+Comfort and hope should offer a short, concrete spiritual action (praying
+to God, giving/bringing/laying something before God, seeking God's
+guidance, thanking God, or similar) that speaks directly to the Life
+Moment above. Write this spiritual action yourself so it stays specific to
+the Life Moment — do not drift onto a different topic. Use the line below
+only as a tone/style example, not as a script to copy if it does not fit
+the Life Moment above:
+"{spiritual_action}"
+{seasonal_block}{build_time_guidance(slot)}
 {brand_preamble}
 You are the direct-response social media copywriter for Prayonit, a Christian
 mobile app that helps people choose how they feel, receive relevant Scripture
@@ -131,44 +624,38 @@ user, that God is speaking through the app, that Prayonit speaks on God's
 behalf, or that the AI knows God's will. Never promise guaranteed healing,
 sleep, peace, or relief.
 
-Create ONE {post_type} acquisition ad intended to drive app downloads,
-following this exact message hierarchy:
-Pain or emotional need -> Spiritual action -> How Prayonit helps -> Download
-action -> 14-day free-trial support.
+Create ONE {post_type} acquisition ad intended to invite the reader into a
+moment of prayer with God, following this exact message hierarchy:
+Pain or emotional need -> Spiritual action -> How Prayonit helps -> Invitation
+to pray together -> Visit prayonit.app (or "Link in bio" on Instagram).
 
 This is advertising, not a sermon and not a verse-of-the-day post.
-Campaign: {campaign['name']} (goal: {campaign['goal']})
-Pain point: {campaign.get('pain_point', '')}
-Emotional promise: {campaign.get('emotional_promise', '')}
-Hook inspiration: {selection['hook']}
-Body angle inspiration: {selection['body_angle']}
-CTA inspiration: {selection['cta']}
 
-Approved spiritual action (use this exact sentence, or only light grammar
-adaptation of it — never invent a new theological claim, and never replace
-it with a different spiritual claim): "{spiritual_action}"
-{formula_block}{persona_block}{seasonal_block}{build_time_guidance(slot)}
 A real destination link will be appended automatically after you respond, so:
-- Do NOT include any URL, link, or web address in facebook_caption,
-  instagram_caption, or threads_caption.
+- Do NOT include any URL, link, or web address in facebook_caption
+  or instagram_caption.
 - Do NOT invent, guess, shorten, rewrite, or substitute any domain or URL
   (for example, do not output "prayonit.com" or any other made-up link).
-- Prayonit does not lead with a direct "download the app" instruction.
-  Prayonit invites people into a moment with God. If you need to reference
-  how someone gets started, say things like "come pray with me" or "join
-  me in prayer" — never "download Prayonit," "install Prayonit," "get the
-  app," or "download the app." The real link/CTA is inserted by the
-  system, not by you.
+- Prayonit does not lead with a free trial or a direct "download the app"
+  instruction. Never mention a 14-day trial, "start your free trial," "try
+  Prayonit free," "download Prayonit," "install the app," or "get the app"
+  anywhere in this ad — those phrases are strictly forbidden. Prayonit
+  invites people into a moment with God and points them to the website
+  first (an app download or trial may only be offered later, on the
+  website itself). If you need to reference how someone gets started, say
+  things like "come pray with me" or "join me in prayer" — never "download
+  Prayonit," "install Prayonit," "get the app," or "download the app." The
+  real link/CTA is inserted by the system, not by you.
 
 Requirements:
 - brand_header: 1 to 3 short words, normally "PRAYONIT".
 - pain_headline: powerful scroll-stopping question or statement naming the
   pain/emotional need, maximum 9 words, short enough for mobile.
-- spiritual_action: the approved spiritual action sentence above, adapted
-  only in light grammar/phrasing if needed. Must still describe the user
-  praying to God (giving/bringing/laying something before God, seeking
-  God's guidance, thanking God, or similar) — never God acting toward the
-  user.
+- spiritual_action: a short spiritual action sentence written specifically
+  for the Life Moment above (not copied from any unrelated example). Must
+  still describe the user praying to God (giving/bringing/laying
+  something before God, seeking God's guidance, thanking God, or similar)
+  — never God acting toward the user, and never a new theological claim.
 - app_benefit: must directly answer pain_headline. Always include "guided"
   or "personalized prayer" and a connection to the user's current mood,
   feelings, worries, gratitude, or situation. Example matching pain_headline
@@ -177,27 +664,61 @@ Requirements:
 - download_cta: must be exactly "{config.PRIMARY_CTA}" (Prayonit invites
   people into a moment with God rather than leading with a download
   instruction; this is an invitation, not a store-download button label).
-- trial_support: must explicitly say "14-day free trial" (for example:
-  "Start your 14-day free trial today."). Never say "try it free today,"
-  "download for free," or any free-trial phrase that omits the 14-day limit.
+- trial_support: must be exactly "Start your prayer at\\nprayonit.app" (this
+  field name is kept for backward compatibility only; its value is now
+  website-first destination text, not a free-trial pitch). Never mention a
+  free trial, download, or install instruction here.
 - facebook_caption: 35 to 70 words, natural and persuasive, following the
-  pain -> spiritual action -> benefit -> invitation -> trial flow, ending
-  with an invitation to pray, not a download instruction. No hashtags.
-  Mention the 14-day free trial at most once.
+  pain -> spiritual action -> benefit -> invitation flow, ending with an
+  invitation to pray (for example "come pray with me"), never a download
+  or free-trial instruction. No hashtags. Never mention a free trial,
+  download, or app-install instruction anywhere in this caption.
 - instagram_caption: shorter and punchier than facebook_caption, 20 to 45
-  words, no hashtags (hashtags are added separately). Mention the 14-day
-  free trial at most once.
-- threads_caption: conversational, shorter than facebook_caption, 15 to 35
-  words, no hashtags (hashtags are added separately). Mention the 14-day
-  free trial at most once.
+  words, no hashtags (hashtags are added separately). Never mention a free
+  trial, download, or app-install instruction anywhere in this caption.
 - story_headline: very short, maximum 6 words, for a vertical Story image.
 - story_spiritual_action: very short version of spiritual_action, maximum 8 words.
 - story_app_benefit: very short version of app_benefit, maximum 12 words,
   readable in at most three lines.
 - story_download_cta: must be exactly "{config.PRIMARY_CTA}".
-- story_trial_support: compact free-trial phrase, maximum 6 words, must say
-  "14-day free trial" or "14-day trial" exactly (for example:
-  "Start your 14-day free trial.").
+- story_trial_support: compact website-first destination phrase, maximum 6
+  words, must reference prayonit.app or "link in bio" — never a free-trial
+  or download phrase (for example: "Start your prayer at prayonit.app.").
+- long_form_type: optional. Must be one of prayer, devotional,
+  encouragement, or none. Use the Expected Long-Form Type in the Creative
+  Brief unless the content format clearly requires none.
+- opening_hook: optional. A short recognition hook, approximately 3 to 10
+  words, complete thought. It should align with pain_headline but does
+  not need to be identical.
+- bridge_line: optional. One natural sentence connecting the hook to the
+  prayer or devotional without changing topics.
+- script_segments: optional. JSON array of 2 to 5 complete text segments
+  for long-form formats, or [] for short formats. Never leave a sentence
+  truncated. Keep the segments in logical order.
+- closing_line: optional. A natural ending such as "Amen." for prayer
+  content, or a concise takeaway for devotional content.
+- engagement_line: optional. One soft engagement invitation only when
+  Engagement Prompt Enabled is true. Leave it empty when engagement is
+  not enabled.
+- estimated_spoken_seconds: optional. Integer between 8 and 35. Match the
+  target duration closely.
+- For prayer long-form output: long_form_type must be prayer. Write a real
+  complete prayer specific to the Life Moment. Keep script_segments to
+  approximately 55 to 90 spoken words total and target about 25 to 35
+  seconds. Do not include app marketing inside the prayer. opening_hook
+  and bridge_line are not part of the prayer word count. closing_line
+  should normally be "Amen."
+- For devotional long-form output: long_form_type must be devotional.
+  Write a meaningful reflection with recognition, comfort, hope, and one
+  takeaway. Keep script_segments to approximately 45 to 80 spoken words
+  total. Avoid hard app promotion. closing_line should be a concise
+  takeaway, not necessarily "Amen."
+- For encouragement long-form output: long_form_type must be encouragement.
+  Keep script_segments to approximately 40 to 70 words total and focus on
+  hope, reassurance, and emotional resolution.
+- For short_promo and short_engagement formats: long_form_type must be
+  none, script_segments must be [], and short-form behavior must remain
+  the focus.
 - Do not make unverifiable claims.
 - Do not promise divine outcomes.
 - Do not say the app replaces God, church, clergy, therapy, or medical care.
@@ -205,10 +726,13 @@ Requirements:
 - Avoid repeating the exact phrase "Scripture-inspired prayers" every time.
 - Output valid JSON only with keys: brand_header, pain_headline,
   spiritual_action, app_benefit, download_cta, trial_support,
-  facebook_caption, instagram_caption, threads_caption, story_headline,
+  facebook_caption, instagram_caption, story_headline,
   story_spiritual_action, story_app_benefit, story_download_cta,
-  story_trial_support.
+  story_trial_support, long_form_type, opening_hook, bridge_line,
+  script_segments, closing_line, engagement_line,
+  estimated_spoken_seconds.
 """
+
 
 
 REQUIRED_AD_COPY_KEYS = (
@@ -220,30 +744,13 @@ REQUIRED_AD_COPY_KEYS = (
     "trial_support",
     "facebook_caption",
     "instagram_caption",
-    "threads_caption",
     "story_headline",
     "story_spiritual_action",
     "story_app_benefit",
     "story_download_cta",
     "story_trial_support",
 )
-
-_LEGACY_REQUIRED_AD_COPY_KEYS = (
-    "brand_header",
-    "pain_headline",
-    "spiritual_action",
-    "app_benefit",
-    "download_cta",
-    "trial_support",
-    "facebook_caption",
-    "instagram_caption",
-    "threads_caption",
-    "story_headline",
-    "story_spiritual_action",
-    "story_app_benefit",
-    "story_download_cta",
-    "story_trial_support",
-)
+_LEGACY_REQUIRED_AD_COPY_KEYS = REQUIRED_AD_COPY_KEYS + ("threads_caption",)
 
 # Text fields where caption-level enforcement (forbidden phrases, unknown
 # feature claims) should be applied. "download_cta" and
@@ -256,7 +763,6 @@ _CAPTION_ENFORCEMENT_FIELDS = (
     "app_benefit",
     "facebook_caption",
     "instagram_caption",
-    "threads_caption",
     "story_headline",
     "story_spiritual_action",
     "story_app_benefit",
@@ -268,7 +774,6 @@ _TRIAL_DURATION_ENFORCED_FIELDS = (
     "trial_support",
     "facebook_caption",
     "instagram_caption",
-    "threads_caption",
 )
 
 # Phrases describing features Prayonit does not have. If Gemini mentions one
@@ -306,11 +811,13 @@ def _mentions_trial_or_free(text: str) -> bool:
     return "trial" in lower or "free" in lower
 
 
-# Explicit forbidden free-trial phrases, checked in addition to the generic
-# "mentions trial/free but omits the 14-day duration" rule below. These
-# overlap with brand_rules['never_say'] but are kept here too so story_cta
-# (which is enforced with its own compact phrase, not the generic
-# never_say -> preferred_cta substitution) is still protected.
+# Explicit forbidden trial-first / download-first phrases. Prayonit's
+# funnel is now invitation-first ("Come pray with me") -> prayonit.app ->
+# an app download or trial may only be offered later, on the website
+# itself -- never as the lead of a social caption. These overlap with
+# brand_rules['never_say'] but are kept here too so functions that don't
+# take the generic never_say -> preferred_cta substitution path (e.g.
+# story_cta, trial_support) are still protected.
 TRIAL_WORDING_VIOLATIONS = [
     "try it free today",
     "download for free",
@@ -320,36 +827,40 @@ TRIAL_WORDING_VIOLATIONS = [
     "always free",
     "unlimited free",
     "free forever",
+    "14-day free trial",
+    "14 day free trial",
+    "start your free trial",
+    "download prayonit",
+    "install prayonit",
+    "install the app",
+    "get the app",
 ]
 
 
 def enforce_trial_duration(text: str, brand_rules: Dict[str, Any]) -> str:
-    """Ensure a caption never contains free-trial wording that omits the
-    14-day duration. If a known violation phrase is found, or the text
-    mentions "trial"/"free" without also mentioning "14-day", the entire
-    field is replaced with the brand's preferred CTA (which always includes
-    the 14-day duration).
+    """Ensure a caption never contains trial-first or download-first
+    wording. Prayonit's funnel is now invitation-first ("Come pray with
+    me") -> prayonit.app -> an app download or trial may only be offered
+    later, on the website itself -- so no caption should lead with, or
+    contain at all, trial or direct-download language. If any forbidden
+    phrase is found, the entire field is replaced with the brand's
+    preferred (invitation-first) CTA.
     """
-    preferred_cta = brand_rules.get("preferred_cta", "Start your 14-day free trial.")
+    preferred_cta = brand_rules.get("preferred_cta", "Come pray with me.")
     lower = text.lower()
     if any(phrase in lower for phrase in TRIAL_WORDING_VIOLATIONS):
-        return preferred_cta
-    if _mentions_trial_or_free(text) and not _contains_14_day_duration(text):
         return preferred_cta
     return text
 
 
 def enforce_story_cta_trial_wording(story_cta: str, brand_rules: Dict[str, Any]) -> str:
-    """Ensure story_cta never contains free-trial wording that omits the
-    14-day duration, using the compact Story-appropriate phrase
-    ("Start your 14-day trial.") instead of the longer preferred_cta, since
-    story_cta must stay short (max 4 words).
+    """Ensure story_cta never contains trial-first or download-first
+    wording, replacing it with the compact, website-first destination
+    phrase instead (e.g. "Start your prayer at prayonit.app").
     """
-    compact_phrase = brand_rules.get("compact_trial_phrase", "Start your 14-day trial.")
+    compact_phrase = brand_rules.get("compact_trial_phrase", "Start your prayer at prayonit.app")
     lower = story_cta.lower()
     if any(phrase in lower for phrase in TRIAL_WORDING_VIOLATIONS):
-        return compact_phrase
-    if _mentions_trial_or_free(story_cta) and not _contains_14_day_duration(story_cta):
         return compact_phrase
     return story_cta
 
@@ -382,21 +893,22 @@ def enforce_download_cta(_text: str) -> str:
 
 
 def enforce_trial_support(text: str, brand_rules: Dict[str, Any], *, compact: bool = False) -> str:
-    """Ensure trial_support/story_trial_support explicitly says the 14-day
-    free trial. Falls back to an approved phrase if missing or malformed.
+    """Ensure trial_support/story_trial_support contain website-first
+    destination text ("Start your prayer at\\nprayonit.app") rather than
+    trial-first or download-first language.
+
+    These field names ("trial_support" / "story_trial_support") are kept
+    for backward compatibility only (per task scope, not broadly renamed);
+    their content is now the website destination, not a free-trial pitch.
     """
-    fallback = (
-        brand_rules.get("compact_trial_phrase", "Start your 14-day trial.")
-        if compact
-        else "Start your 14-day free trial today."
-    )
+    fallback = config.VISUAL_DESTINATION_TEXT
     text = (text or "").strip()
     if not text:
         return fallback
     lower = text.lower()
     if any(phrase in lower for phrase in TRIAL_WORDING_VIOLATIONS):
         return fallback
-    if not _contains_14_day_duration(text):
+    if _mentions_trial_or_free(text):
         return fallback
     return text
 
@@ -601,28 +1113,12 @@ def apply_brand_enforcement(ad_copy: Dict[str, str], brand_rules: Dict[str, Any]
     return enforced
 
 
-def generate_ad_copy(
+def parse_ad_copy_response(
+    raw: str,
     *,
-    post_type: str,
-    selection: Dict[str, Any],
     slot: str,
-    tracked_url: str,
-) -> Dict[str, str]:
-    prompt = build_prompt(
-        post_type=post_type, selection=selection, slot=slot, tracked_url=tracked_url
-    )
-
-    client = _get_gemini_client()
-    response = client.models.generate_content(
-        model=config.GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=1.0,
-            response_mime_type="application/json",
-        ),
-    )
-
-    raw = (response.text or "").strip()
+) -> Dict[str, Any]:
+    """Parse Gemini JSON and normalize optional long-form fields."""
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
@@ -635,11 +1131,80 @@ def generate_ad_copy(
         if not str(data.get(key, "")).strip():
             raise RuntimeError(f"Gemini response is missing '{key}': {data}")
 
-    ad_copy = {key: str(data[key]).strip() for key in REQUIRED_AD_COPY_KEYS}
+    ad_copy: Dict[str, Any] = {key: str(data[key]).strip() for key in REQUIRED_AD_COPY_KEYS}
+    if "threads_caption" in data and str(data.get("threads_caption", "")).strip():
+        ad_copy["threads_caption"] = str(data["threads_caption"]).strip()
+
+    todays_content = content_engine.get_todays_content(slot=slot)
+    presentation = content_engine.get_presentation_config(todays_content)
+    ad_copy.update(
+        normalize_long_form_fields(
+            data,
+            content_type=todays_content.get("content_type", ""),
+            video_template=presentation["video_template"],
+            duration_seconds=presentation["duration_seconds"],
+            engagement_prompt_enabled=presentation["engagement_prompt_enabled"],
+        )
+    )
+    return ad_copy
+
+
+def generate_ad_copy(
+    *,
+    post_type: str,
+    selection: Dict[str, Any],
+    slot: str,
+    tracked_url: str,
+) -> Dict[str, Any]:
+    prompt = build_prompt(
+        post_type=post_type, selection=selection, slot=slot, tracked_url=tracked_url
+    )
+
+    # TEMPORARY DEBUG LOGGING: verify the Creative Brief is actually part
+    # of the prompt Gemini receives. Safe to remove once verified.
+    print("======== GEMINI PROMPT ========")
+    print(prompt[:1000])
+    print("===============================")
+
+    response = None
+    attempts = _get_content_model_attempt_plan()
+    max_attempts = len(attempts)
+    for attempt, (model_name, key_label, api_key) in enumerate(attempts, start=1):
+        print(
+            f"Gemini content model attempt {attempt}/{max_attempts}: {model_name} "
+            f"using {key_label} key"
+        )
+        client = _get_gemini_client(api_key)
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=1.0,
+                    response_mime_type="application/json",
+                ),
+            )
+            break
+        except Exception as exc:  # noqa: BLE001
+            if not _is_temporary_gemini_error(exc):
+                raise
+            if attempt >= max_attempts:
+                print(f"Gemini content model temporary failure: {model_name} — {exc}")
+                raise
+            status_match = re.search(r"\b(429|500|502|503|504)\b", str(exc))
+            status = status_match.group(1) if status_match else str(exc)
+            print(f"Gemini content model temporary failure: {model_name} — {status}")
+            print(f"Switching Gemini content model to: {attempts[attempt][0]}")
+
+    if response is None:  # pragma: no cover - defensive
+        raise RuntimeError("Gemini response was unavailable after content-model failover.")
+
+    raw = (response.text or "").strip()
+    ad_copy = parse_ad_copy_response(raw, slot=slot)
     return apply_brand_enforcement(ad_copy, config.BRAND_RULES)
 
 
-def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str, str]:
+def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str, Any]:
     """Deterministic local copy generator used for TEST_MODE preview runs."""
     campaign = selection["campaign"]
     territory = selection.get("emotional_territory") or creative_engine_v3.classify_emotional_territory(
@@ -667,19 +1232,69 @@ def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str,
         "spiritual_action": spiritual_action,
         "app_benefit": LOCKED_APP_BENEFIT,
         "download_cta": config.PRIMARY_CTA,
-        "trial_support": "Start your 14-day free trial today.",
+        "trial_support": config.VISUAL_DESTINATION_TEXT,
         "facebook_caption": (
-            f"{pain_headline} {spiritual_action} {LOCKED_APP_BENEFIT} "
-            "Come pray with me and start your 14-day free trial."
+            f"{pain_headline} {spiritual_action} {LOCKED_APP_BENEFIT}"
         ),
         "instagram_caption": f"{pain_headline} {spiritual_action} {LOCKED_APP_BENEFIT}",
-        "threads_caption": f"{pain_headline} {spiritual_action} {LOCKED_APP_BENEFIT}",
         "story_headline": pain_headline,
         "story_spiritual_action": spiritual_action,
         "story_app_benefit": LOCKED_STORY_APP_BENEFIT,
         "story_download_cta": config.PRIMARY_CTA,
-        "story_trial_support": "Start your 14-day free trial.",
+        "story_trial_support": config.VISUAL_DESTINATION_TEXT,
     }
+    todays_content = content_engine.get_todays_content(slot=slot)
+    presentation = content_engine.get_presentation_config(todays_content)
+    long_form = build_long_form_defaults(
+        content_type=todays_content.get("content_type", ""),
+        video_template=presentation["video_template"],
+        duration_seconds=presentation["duration_seconds"],
+    )
+    if long_form["long_form_type"] == "prayer":
+        long_form.update(
+            {
+                "opening_hook": "God sees your burden.",
+                "bridge_line": "Let this prayer meet you right where you are.",
+                "script_segments": [
+                    "Lord, meet me in this moment and calm the worries I have been carrying.",
+                    "Give me strength to trust You with what feels heavy and wisdom for the next step in front of me.",
+                    "Cover this day with Your peace and help me remember that I do not walk through it alone.",
+                ],
+                "closing_line": "Amen.",
+                "engagement_line": "Save this prayer for later today." if presentation["engagement_prompt_enabled"] else "",
+                "estimated_spoken_seconds": presentation["duration_seconds"],
+            }
+        )
+    elif long_form["long_form_type"] == "devotional":
+        long_form.update(
+            {
+                "opening_hook": "You are not forgotten.",
+                "bridge_line": "Take this reflection with you for a moment.",
+                "script_segments": [
+                    "When the middle of the week feels heavy, God still meets you with steady compassion and patient strength.",
+                    "Even if you feel worn down, hope is not gone, and small faithfulness still matters today.",
+                    "Take the next step in peace, trusting that God is present with you in it.",
+                ],
+                "closing_line": "Take the next faithful step today.",
+                "engagement_line": "Share this with someone who needs hope today." if presentation["engagement_prompt_enabled"] else "",
+                "estimated_spoken_seconds": presentation["duration_seconds"],
+            }
+        )
+    elif long_form["long_form_type"] == "encouragement":
+        long_form.update(
+            {
+                "opening_hook": "Hope is still here.",
+                "bridge_line": "Hold onto this encouragement for a moment.",
+                "script_segments": [
+                    "You may be tired, but God has not left you, and this hard moment will not have the final word.",
+                    "Take a breath, receive His peace, and keep moving with steady hope today.",
+                ],
+                "closing_line": "You can keep going.",
+                "engagement_line": "Send this to someone who needs encouragement." if presentation["engagement_prompt_enabled"] else "",
+                "estimated_spoken_seconds": presentation["duration_seconds"],
+            }
+        )
+    ad_copy.update(long_form)
     return apply_brand_enforcement(ad_copy, config.BRAND_RULES)
 
 
@@ -700,28 +1315,31 @@ def _strip_invented_urls(text: str) -> str:
     return cleaned.strip()
 
 
-# Sentences/phrases that duplicate the 14-day free trial CTA the system
-# always appends to the Instagram caption. Matched case-insensitively
-# against whole sentences (split on ., !, ?) so wording variations Gemini
-# might produce (e.g. "Get Prayonit today and start your 14-day free
-# trial.") are removed before the exact required CTA is appended, avoiding
-# duplicate trial-wording sentences in the final caption.
-_DUPLICATE_TRIAL_CTA_PATTERN = re.compile(
-    r"\b(start|begin|try)\b.{0,80}?\b14-?\s*day\b.{0,40}?\b(free\s+)?trial\b",
+# Sentences/phrases that contain trial-first or download-first CTA
+# wording. Prayonit's funnel is now invitation-first ("Come pray with me")
+# -> prayonit.app / Link in bio -> an app download or trial may only be
+# offered later, on the website itself -- so social captions must never
+# contain this wording at all (not just deduplicated).
+_FORBIDDEN_TRIAL_OR_DOWNLOAD_SENTENCE_PATTERN = re.compile(
+    r"\b(start|begin|try)\b.{0,80}?\b14-?\s*day\b.{0,40}?\b(free\s+)?trial\b"
+    r"|\bstart\s+your\s+free\s+trial\b"
+    r"|\btry\s+prayonit\s+free\b"
+    r"|\bdownload\s+prayonit\b"
+    r"|\binstall\s+(the\s+app|prayonit)\b"
+    r"|\bget\s+the\s+app\b",
     flags=re.IGNORECASE,
 )
 
 
-def _strip_duplicate_trial_cta_sentences(text: str) -> str:
-    """Remove any sentence that already contains 14-day-trial CTA wording,
-    so the caption builder can append the exact required CTA exactly once.
-
-    Used for Instagram, where the required trial phrase is always appended
-    programmatically afterward, so every existing trial-wording sentence in
-    Gemini's caption body must be removed (not just extras).
+def _strip_forbidden_trial_and_download_sentences(text: str) -> str:
+    """Remove every sentence containing trial-first or download-first CTA
+    wording (not just duplicates), so social captions never lead with, or
+    contain at all, a free-trial pitch or a direct app-download/install
+    instruction. The invitation-first CTA and prayonit.app/Link-in-bio
+    destination text are appended separately by build_platform_captions.
     """
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    kept = [s for s in sentences if s.strip() and not _DUPLICATE_TRIAL_CTA_PATTERN.search(s)]
+    kept = [s for s in sentences if s.strip() and not _FORBIDDEN_TRIAL_OR_DOWNLOAD_SENTENCE_PATTERN.search(s)]
     return " ".join(kept).strip()
 
 
@@ -781,89 +1399,55 @@ def _strip_duplicate_download_cta_sentences(text: str) -> str:
     return " ".join(kept).strip()
 
 
-def _keep_only_first_trial_cta_sentence(text: str) -> str:
-    """Keep at most one sentence containing 14-day-trial CTA wording,
-    removing any additional duplicate sentences.
-
-    Used for Facebook/Threads, where no trial phrase is appended
-    programmatically, so a single existing mention from Gemini is fine but
-    duplicates are not (task requirement: at most once per caption).
-    """
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    kept = []
-    seen_trial_sentence = False
-    for sentence in sentences:
-        if not sentence.strip():
-            continue
-        if _DUPLICATE_TRIAL_CTA_PATTERN.search(sentence):
-            if seen_trial_sentence:
-                continue
-            seen_trial_sentence = True
-        kept.append(sentence)
-    return " ".join(kept).strip()
-
-
 def build_platform_captions(
     ad_copy: Dict[str, str],
     selection: Dict[str, Any],
     platform_urls: Dict[str, str],
 ) -> Dict[str, str]:
     """Build final per-platform captions with hashtags and the exact,
-    programmatically-appended download URL for each platform.
+    programmatically-appended website destination for each platform.
 
     Gemini is never trusted to insert URLs: any URL it produced is stripped
     from each caption, and the exact URL supplied in platform_urls (either
     the tracked URL when TRACKING_ENABLED=true, or DEFAULT_DESTINATION_URL
-    when tracking is disabled) is appended afterward, verbatim.
+    when tracking is disabled) is appended afterward, verbatim. Every
+    caption body also has any trial-first or download-first sentence
+    removed, since Prayonit's funnel is invitation-first ("Come pray with
+    me") -> prayonit.app / Link in bio -> an app download or trial may only
+    be offered later, on the website itself.
     """
     campaign = selection["campaign"]
 
     facebook_url = platform_urls["facebook"]
-    instagram_url = platform_urls["instagram"]
-    threads_url = platform_urls["threads"]
+    _instagram_url = platform_urls["instagram"]
 
     facebook_body = _strip_invented_urls(ad_copy["facebook_caption"])
-    # Remove any simple Gemini-generated download CTA sentences so the
-    # system can append the exact required CTA/URL consistently.
+    # Remove any Gemini-generated download or trial CTA sentences so the
+    # system can append the exact required invitation-first CTA/URL
+    # consistently, with no trial-first or download-first language at all.
     facebook_body = _strip_duplicate_download_cta_sentences(facebook_body)
-    # Keep at most one trial-wording sentence (Facebook has no programmatic
-    # trial line appended, so a single Gemini-written mention is fine, but
-    # duplicates are removed per the "at most once per caption" rule).
-    facebook_body = _keep_only_first_trial_cta_sentence(facebook_body)
+    facebook_body = _strip_forbidden_trial_and_download_sentences(facebook_body)
     facebook_caption = f"{facebook_body}\n\n{config.FACEBOOK_CTA}\n{facebook_url}"
 
     ig_hashtag_pool = [h for h in campaign.get("instagram_hashtags", []) if h.lower() != "#prayonit"]
     ig_count = min(len(ig_hashtag_pool), random.randint(4, 7)) if ig_hashtag_pool else 0
     ig_hashtags = ["#Prayonit"] + (random.sample(ig_hashtag_pool, k=ig_count) if ig_count else [])
     instagram_body = _strip_invented_urls(ad_copy["instagram_caption"])
-    # Remove any Gemini-generated sentence that already duplicates the
-    # required 14-day free trial CTA, so it is never appended twice.
-    instagram_body = _strip_duplicate_trial_cta_sentences(instagram_body)
-    # Also remove simple download CTA sentences so we don't end up with a
-    # separate "Download Prayonit" line before the trial CTA/hashtags.
+    # Remove any Gemini-generated trial-first or download-first sentence so
+    # the caption never leads with (or contains at all) that language.
+    instagram_body = _strip_forbidden_trial_and_download_sentences(instagram_body)
     instagram_body = _strip_duplicate_download_cta_sentences(instagram_body)
     # Instagram feed captions do not make raw URLs clickable, so the
     # destination URL is never appended here. The exact same URL
     # (instagram_url) is instead placed in metadata.instagram.link on the
-    # Buffer post (see buffer_client.buffer_create_post).
-    instagram_caption = f"{instagram_body}\n\nStart your 14-day free trial.\n\n{config.INSTAGRAM_CTA}"
+    # Buffer post (see buffer_client.buffer_create_post). No trial-first
+    # line is appended -- the invitation-first CTA (which includes "Link in
+    # bio") is the only thing appended after the body.
+    instagram_caption = f"{instagram_body}\n\n{config.INSTAGRAM_CTA}"
     if ig_hashtags:
         instagram_caption = f"{instagram_caption}\n\n{' '.join(ig_hashtags)}"
-
-    th_hashtag_pool = [h for h in campaign.get("threads_hashtags", []) if h.lower() != "#prayonit"]
-    th_count = min(len(th_hashtag_pool), 1) if th_hashtag_pool else 0
-    th_hashtags = ["#Prayonit"] + (random.sample(th_hashtag_pool, k=th_count) if th_count else [])
-    threads_body = _strip_invented_urls(ad_copy["threads_caption"])
-    # Remove simple Gemini-generated download CTA sentences before the
-    # official Try/URL line is appended.
-    threads_body = _strip_duplicate_download_cta_sentences(threads_body)
-    threads_body = _keep_only_first_trial_cta_sentence(threads_body)
-    threads_caption = f"{threads_body}\n\n{config.THREADS_CTA}\n{threads_url}"
-    if th_hashtags:
-        threads_caption = f"{threads_caption}\n\n{' '.join(th_hashtags)}"
 
     return {
         "facebook": facebook_caption,
         "instagram": instagram_caption,
-        "threads": threads_caption,
     }

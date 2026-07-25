@@ -63,41 +63,59 @@ def buffer_create_post(
     *,
     channel_id: str,
     caption: str,
-    image_url: str,
     service: str,
     post_type: str,
     due_at_iso: str,
+    image_url: Optional[str] = None,
+    video_url: Optional[str] = None,
     link: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create a single Buffer post. Raises on any failure.
 
+    Exactly one of image_url / video_url must be provided. image_url is
+    used for Feed/Story image posts (unchanged behavior). video_url is used
+    for Facebook Reel, Instagram Reel, and TikTok video posts (Phase 2A):
+    per the live Buffer GraphQL schema (introspected via
+    discover_buffer_metrics_schema(), see data/buffer_metrics_schema.json),
+    CreatePostInput.assets accepts [AssetInput!]!, and AssetInput has both
+    an "image: ImageAssetInput" field ({url, thumbnailUrl, metadata}) and a
+    "video: VideoAssetInput" field ({url, thumbnailUrl, metadata}) -- the
+    same createPost mutation is reused for video, only the asset shape
+    changes.
+
     link: the exact destination URL for this platform item (tracked URL when
     TRACKING_ENABLED=true, otherwise DEFAULT_DESTINATION_URL), as returned by
     tracking.create_tracked_link(). Only used for Instagram feed posts
-    (metadata.instagram.link); ignored for Instagram Stories and all other
-    services/post types.
+    (metadata.instagram.link); ignored for Instagram Stories, Reels, and all
+    other services/post types.
     """
+    if bool(image_url) == bool(video_url):
+        raise ValueError("buffer_create_post requires exactly one of image_url or video_url.")
+
     input_data: Dict[str, Any] = {
         "text": caption,
         "channelId": channel_id,
         "schedulingType": "automatic",
         "mode": "customScheduled",
         "dueAt": due_at_iso,
-        "assets": [{"image": {"url": image_url}}],
+        "assets": [{"video": {"url": video_url}}] if video_url else [{"image": {"url": image_url}}],
         "source": "Prayonit Python Automation",
         "aiAssisted": True,
     }
 
     if service == "facebook":
+        # PostTypeFacebook (confirmed via schema introspection) includes
+        # "post", "story", and "reel" -- post_type="reel" is passed through
+        # unchanged here, identical to the existing "post"/"story" handling.
         input_data["metadata"] = {"facebook": {"type": post_type}}
     elif service == "instagram":
         instagram_metadata: Dict[str, Any] = {
             "type": post_type,
             "shouldShareToFeed": post_type == "post",
         }
-        # Only Instagram feed posts get a link. Stories are left unchanged
-        # unless/until Buffer's schema is verified to support a link field
-        # for InstagramStoryMetadataInput.
+        # Only Instagram feed posts get a link. Stories and Reels are left
+        # unchanged unless/until Buffer's schema is verified to support a
+        # link field for those metadata shapes.
         if post_type == "post" and link:
             instagram_metadata["link"] = link
         input_data["metadata"] = {"instagram": instagram_metadata}
@@ -108,6 +126,11 @@ def buffer_create_post(
         if config.THREADS_LOCATION_ID.strip():
             threads_metadata["locationId"] = config.THREADS_LOCATION_ID.strip()
         input_data["metadata"] = {"threads": threads_metadata}
+    elif service == "tiktok":
+        # TikTokPostMetadataInput (confirmed via schema introspection) has
+        # only "title" and "isAiGenerated" fields -- no "type" enum, since
+        # TikTok channels only accept video posts.
+        input_data["metadata"] = {"tiktok": {"isAiGenerated": True}}
 
     response = requests.post(
         config.BUFFER_ENDPOINT,

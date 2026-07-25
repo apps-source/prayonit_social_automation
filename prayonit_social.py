@@ -18,6 +18,7 @@ and never records a false "scheduled" Buffer post.
 import argparse
 import json
 import os
+import random
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -36,6 +37,8 @@ import history_store
 import image_renderer
 import prompt_builder
 import tracking
+import voice_provider
+from engines import content_engine
 
 
 _LOCAL_BG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
@@ -244,13 +247,14 @@ def cmd_history(days):
 
 
 def cmd_run(slot) -> int:
-    config.require_env(config.TEST_MODE)
+    config.require_env(config.TEST_MODE, preview_mode=config.PREVIEW_MODE)
     config.validate_destination_config()
     history_store.initialize_database()
 
     run_id = str(uuid.uuid4())
     print("Run ID: {0}".format(run_id))
     print("TEST_MODE: {0}".format(config.TEST_MODE))
+    print("PREVIEW_MODE: {0}".format(config.PREVIEW_MODE))
 
     selection = campaign_engine.choose_selection(slot)
     campaign = selection["campaign"]
@@ -312,7 +316,7 @@ def cmd_run(slot) -> int:
         selected_cta=selection["cta"],
         selected_thread_topic=selection["thread_topic"],
         background_object_path=chosen_background,
-        status="dry_run" if config.TEST_MODE else "in_progress",
+        status="dry_run" if (config.TEST_MODE or config.PREVIEW_MODE) else "in_progress",
     )
 
     territory = background_choice.get("emotional_territory") or creative_engine_v3.classify_emotional_territory(
@@ -330,16 +334,16 @@ def cmd_run(slot) -> int:
     recent_headlines = [row["headline"] for row in recent_rows if row["headline"]]
 
     tracked_urls = {}
-    if config.TEST_MODE:
+    if config.TEST_MODE or config.PREVIEW_MODE:
         fallback_url = config.DEFAULT_DESTINATION_URL or "https://example.com/prayonit"
         tracked_urls = {
             "facebook": fallback_url,
             "instagram": fallback_url,
-            "threads": fallback_url,
         }
-        print("TEST_MODE: tracking calls skipped; using fallback URL.")
+        mode_label = "TEST_MODE" if config.TEST_MODE else "PREVIEW_MODE"
+        print("{0}: tracking calls skipped; using fallback URL.".format(mode_label))
     else:
-        for platform in ("facebook", "instagram", "threads"):
+        for platform in ("facebook", "instagram"):
             tracked_urls[platform] = tracking.create_tracked_link(
                 run_id=run_id,
                 campaign_name=campaign["name"],
@@ -395,6 +399,7 @@ def cmd_run(slot) -> int:
                 run_id=run_id,
                 recent_headlines=recent_headlines,
                 max_chars=45,
+                original_headline=original_headline,
             )
             if recovered:
                 ad_copy["pain_headline"] = recovered
@@ -412,7 +417,6 @@ def cmd_run(slot) -> int:
     platform_captions = prompt_builder.build_platform_captions(ad_copy, selection, tracked_urls)
     print("Facebook caption: {0}".format(platform_captions["facebook"]))
     print("Instagram caption: {0}".format(platform_captions["instagram"]))
-    print("Threads caption: {0}".format(platform_captions["threads"]))
 
     background_image = image_renderer.load_background(chosen_background)
     feed_image = image_renderer.compose_ad(background_image, ad_copy)
@@ -477,15 +481,101 @@ def cmd_run(slot) -> int:
     print("Saved feed preview: {0}".format(feed_local_path.resolve()))
     print("Saved story preview: {0}".format(story_local_path.resolve()))
 
+    # Optional local-only video rendering. Short formats keep using the
+    # existing 8-second motion renderer; long-form prayer/devotional/
+    # encouragement formats route to the long-form compositor.
+    video_local_path = None
+    if config.VIDEO_ENABLED:
+        import long_form_renderer
+        import motion_renderer
+
+        try:
+            todays_content = content_engine.get_todays_content(slot=slot)
+            presentation_config = content_engine.get_presentation_config(todays_content)
+            video_template = presentation_config.get("video_template", "short_promo")
+            if video_template in ("long_prayer", "long_devotional", "long_encouragement"):
+                filename_suffix = video_template.replace("long_", "")
+                narration_audio_path = None
+                narration_duration = None
+                narration_segment_timeline = None
+                narration_text = voice_provider.build_narration_text(ad_copy)
+                if config.VOICE_ENABLED and narration_text:
+                    audio_filename = config.OUTPUT_AUDIO_DIR / "prayonit-{0}-voice-{1}.wav".format(
+                        filename_suffix,
+                        timestamp,
+                    )
+                    hook_window = long_form_renderer.OPENING_HOOK_DURATION if ad_copy.get("opening_hook") else 0.0
+                    if config.TEST_MODE:
+                        narration_duration = float(
+                            max(8, min(35, int(ad_copy.get("estimated_spoken_seconds", 30) or 30)))
+                        )
+                        narration_audio_path = voice_provider.create_silent_wav(
+                            audio_filename,
+                            narration_duration,
+                        )
+                    else:
+                        narration_audio_path = voice_provider.generate_voiceover(
+                            narration_text,
+                            voice_provider.select_default_voice(ad_copy),
+                            voice_provider.select_style_instruction(ad_copy),
+                            audio_filename,
+                            copy=ad_copy,
+                        )
+                        if narration_audio_path is not None:
+                            narration_duration = voice_provider.measure_audio_duration(narration_audio_path)
+                    if narration_duration is not None:
+                        narration_segment_timeline = voice_provider.build_narration_segment_timeline(
+                            ad_copy,
+                            narration_duration,
+                            hook_window=hook_window,
+                        )
+
+                candidate_video_path = config.OUTPUT_VIDEOS_LONG_DIR / "prayonit-long-{0}-{1}.mp4".format(
+                    filename_suffix,
+                    timestamp,
+                )
+                video_local_path = long_form_renderer.render_long_form_video(
+                    copy=ad_copy,
+                    presentation_config=presentation_config,
+                    output_path=candidate_video_path,
+                    narration_audio_path=narration_audio_path,
+                    narration_duration=narration_duration,
+                    narration_segment_timeline=narration_segment_timeline,
+                )
+                print("Saved long-form video preview: {0}".format(video_local_path.resolve()))
+            else:
+                motion_backgrounds = sorted(config.MOTION_BACKGROUNDS_DIR.glob("*.mp4"))
+                if not motion_backgrounds:
+                    print(
+                        "VIDEO_ENABLED=true but no .mp4 files found in {0}; skipping video.".format(
+                            config.MOTION_BACKGROUNDS_DIR
+                        )
+                    )
+                else:
+                    motion_background_path = random.choice(motion_backgrounds)
+                    candidate_video_path = config.OUTPUT_VIDEOS_DIR / "prayonit-reel-{0}.mp4".format(timestamp)
+                    motion_renderer.render_motion_ad(
+                        ad_copy=ad_copy,
+                        background_path=motion_background_path,
+                        output_path=candidate_video_path,
+                    )
+                    video_local_path = candidate_video_path
+                    print("Saved motion video preview: {0}".format(video_local_path.resolve()))
+        except Exception as exc:
+            # Video generation is best-effort and local-only in this phase;
+            # it must never block or fail the existing feed/story run.
+            print("Motion video generation skipped due to error: {0}".format(exc), file=sys.stderr)
+
     history_store.update_run_record(
         run_row_id,
         headline=ad_copy["pain_headline"],
         story_headline=ad_copy["story_headline"],
-        status="dry_run" if config.TEST_MODE else "in_progress",
+        status="dry_run" if (config.TEST_MODE or config.PREVIEW_MODE) else "in_progress",
     )
 
-    if config.TEST_MODE:
-        print("TEST_MODE=true, so nothing was uploaded or posted.")
+    if config.TEST_MODE or config.PREVIEW_MODE:
+        mode_label = "TEST_MODE" if config.TEST_MODE else "PREVIEW_MODE"
+        print("{0}=true, so nothing was uploaded or posted.".format(mode_label))
         return 0
 
     if creative_engine_v3.should_block_buffer(qa_report):
@@ -508,6 +598,23 @@ def cmd_run(slot) -> int:
     print("Uploaded story image: {0}".format(story_remote_path))
     print("Story public URL: {0}".format(story_url))
 
+    # Phase 2A: optional video upload + publish. Only runs when both
+    # VIDEO_ENABLED produced a local video AND VIDEO_PUBLISH_ENABLED=true.
+    # TEST_MODE already returned before this point (see above), so this
+    # code path only ever runs in production, matching the existing
+    # image-publishing safety behavior.
+    video_url = None
+    if config.VIDEO_PUBLISH_ENABLED and video_local_path is not None:
+        video_remote_path, video_url = image_renderer.upload_generated_video(
+            video_local_path, config.GENERATED_VIDEO_PREFIX, supabase
+        )
+        print("Uploaded video: {0}".format(video_remote_path))
+        print("Video public URL: {0}".format(video_url))
+        history_store.update_run_record(
+            run_row_id,
+            generated_video_object_path=video_remote_path,
+        )
+
     history_store.update_run_record(
         run_row_id,
         generated_feed_object_path=feed_remote_path,
@@ -516,23 +623,35 @@ def cmd_run(slot) -> int:
     )
 
     buffer_jobs = [
-        ("facebook", "post", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], feed_url, tracked_urls["facebook"]),
-        ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], feed_url, tracked_urls["instagram"]),
-        ("facebook", "story", config.FACEBOOK_CHANNEL_ID, "", story_url, None),
-        ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, "", story_url, None),
-        ("threads", "post", config.THREADS_CHANNEL_ID, platform_captions["threads"], feed_url, tracked_urls["threads"]),
+        ("facebook", "post", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], feed_url, None, tracked_urls["facebook"]),
+        ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], feed_url, None, tracked_urls["instagram"]),
+        ("facebook", "story", config.FACEBOOK_CHANNEL_ID, "", story_url, None, None),
+        ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, "", story_url, None, None),
     ]
+
+    if video_url is not None:
+        # Same generated MP4 (video_url) is reused for all three video
+        # destinations. Same captions already produced by
+        # build_platform_captions() are reused: Facebook Reel uses the
+        # Facebook caption, Instagram Reel and TikTok use the Instagram
+        # caption (hashtags included, unchanged).
+        buffer_jobs.extend([
+            ("facebook", "reel", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], None, video_url, None),
+            ("instagram", "reel", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
+            ("tiktok", "video", config.TIKTOK_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
+        ])
 
     successes = []
     failures = []
 
-    for service, item_post_type, channel_id, caption, image_url, tracked_url in buffer_jobs:
+    for service, item_post_type, channel_id, caption, image_url, job_video_url, tracked_url in buffer_jobs:
         label = "{0} {1}".format(service, item_post_type)
         try:
             result = buffer_client.buffer_create_post(
                 channel_id=channel_id,
                 caption=caption,
                 image_url=image_url,
+                video_url=job_video_url,
                 service=service,
                 post_type=item_post_type,
                 due_at_iso=due_at_iso,
@@ -553,7 +672,7 @@ def cmd_run(slot) -> int:
                 headline=ad_copy["pain_headline"],
                 caption=caption,
                 tracked_url=tracked_url,
-                image_url=image_url,
+                image_url=image_url or job_video_url,
                 buffer_status="scheduled",
             )
             successes.append(label)
@@ -569,7 +688,7 @@ def cmd_run(slot) -> int:
                 slot=slot,
                 error_message=str(exc),
                 caption=caption,
-                image_url=image_url,
+                image_url=image_url or job_video_url,
             )
             failures.append(label)
 

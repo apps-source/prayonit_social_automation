@@ -29,6 +29,7 @@ SCHEMA_STATEMENTS = [
         background_object_path TEXT,
         generated_feed_object_path TEXT,
         generated_story_object_path TEXT,
+        generated_video_object_path TEXT,
         headline TEXT,
         story_headline TEXT,
         status TEXT NOT NULL,
@@ -124,6 +125,16 @@ def initialize_database() -> None:
     with _connect() as conn:
         for statement in SCHEMA_STATEMENTS:
             conn.execute(statement)
+        # Lightweight migration: add columns introduced after initial release
+        # to any pre-existing campaigns_used table (CREATE TABLE IF NOT EXISTS
+        # above will not alter an already-created table).
+        existing_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(campaigns_used)")
+        }
+        if "generated_video_object_path" not in existing_columns:
+            conn.execute(
+                "ALTER TABLE campaigns_used ADD COLUMN generated_video_object_path TEXT"
+            )
 
 
 def create_run_record(
@@ -176,6 +187,7 @@ def update_run_record(
     *,
     generated_feed_object_path: Optional[str] = None,
     generated_story_object_path: Optional[str] = None,
+    generated_video_object_path: Optional[str] = None,
     headline: Optional[str] = None,
     story_headline: Optional[str] = None,
     status: Optional[str] = None,
@@ -185,6 +197,7 @@ def update_run_record(
     fields = {
         "generated_feed_object_path": generated_feed_object_path,
         "generated_story_object_path": generated_story_object_path,
+        "generated_video_object_path": generated_video_object_path,
         "headline": headline,
         "story_headline": story_headline,
         "status": status,

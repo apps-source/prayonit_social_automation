@@ -410,12 +410,32 @@ def select_recovered_headline(
     run_id: str,
     recent_headlines: Iterable[str],
     max_chars: int = 45,
+    original_headline: Optional[str] = None,
 ) -> Optional[str]:
-    """Return first passing deterministic candidate from the slot/territory pool.
+    """Recover a headline that failed quality validation.
 
-    Candidates are tried in deterministic rotated order; each candidate is
-    validated with the existing headline-quality validator.
+    Recovery first tries to shorten `original_headline` (preserving its
+    topic) via deterministic_headline_shorten(). Only if that shortened
+    headline still fails quality validation (or no original_headline is
+    given) does this fall back to the static, territory-keyed fallback
+    pool below -- which is topic-generic (e.g. "purpose"/"loneliness") and
+    may not match the original headline's specific subject (for example a
+    friendship-related headline), so it is used only as a last resort.
+
+    Candidates from the fallback pool are tried in deterministic rotated
+    order; each candidate is validated with the existing headline-quality
+    validator.
     """
+    if original_headline:
+        shortened = deterministic_headline_shorten(original_headline, max_chars=max_chars)
+        report = validate_headline_quality(
+            shortened,
+            max_chars=max_chars,
+            recent_headlines=recent_headlines,
+        )
+        if report.get("accepted"):
+            return shortened
+
     for candidate in deterministic_fallback_candidates(
         slot=slot,
         territory=territory,

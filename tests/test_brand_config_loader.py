@@ -46,7 +46,11 @@ def test_existing_constants_match_original_values():
     # verify the underlying brand-config-driven filename directly instead of
     # the (intentionally test-isolated) live DATABASE_PATH constant.
     assert config.BRAND_CONFIG.get("database", {}).get("path") == "prayonit_marketing.db"
-    assert config.TRACKING_BASE_URL == "https://prayonit.nextwavestudiosapp.com"
+    # NOTE: TRACKING_BASE_URL was intentionally migrated to the website-first
+    # destination (https://prayonit.app) as part of the approved website-first
+    # configuration update; this assertion was updated to match that change,
+    # not weakened (the test still asserts an exact, specific expected value).
+    assert config.TRACKING_BASE_URL == "https://prayonit.app"
 
 
 def test_existing_paths_actually_exist_on_disk():

@@ -223,3 +223,116 @@ def test_threads_metadata_omits_empty_location_values(monkeypatch):
     assert "locationName" not in input_data["metadata"]["threads"]
     assert "locationId" not in input_data["metadata"]["threads"]
     assert input_data["metadata"]["threads"] == {"type": "post"}
+
+
+# ---------- Phase 2A: video (Reel/TikTok) payload tests (schema-verified, mocked HTTP only) ----------
+
+def _capture_video_input(service, post_type, video_url="https://cdn.example.com/reel.mp4", link=None):
+    payload = {"data": {"createPost": {"post": {"id": "vid-post"}}}}
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured["input"] = json["variables"]["input"]
+        return _mock_response(payload)
+
+    with patch("buffer_client.requests.post", side_effect=fake_post):
+        buffer_client.buffer_create_post(
+            channel_id="chan-1",
+            caption="caption text",
+            service=service,
+            post_type=post_type,
+            due_at_iso="2026-07-10T13:00:00Z",
+            video_url=video_url,
+            link=link,
+        )
+    return captured["input"]
+
+
+def test_facebook_reel_uses_video_asset_not_image():
+    input_data = _capture_video_input("facebook", "reel", video_url="https://cdn.example.com/reel.mp4")
+    assert input_data["assets"] == [{"video": {"url": "https://cdn.example.com/reel.mp4"}}]
+    assert not any("image" in asset for asset in input_data["assets"])
+
+
+def test_facebook_reel_metadata_type_is_reel():
+    input_data = _capture_video_input("facebook", "reel")
+    assert input_data["metadata"]["facebook"] == {"type": "reel"}
+
+
+def test_facebook_reel_sends_no_link_attachment():
+    input_data = _capture_video_input("facebook", "reel", link="https://example.com/app")
+    assert "linkAttachment" not in input_data["metadata"]["facebook"]
+    assert "link" not in input_data["metadata"]["facebook"]
+
+
+def test_instagram_reel_uses_video_asset_not_image():
+    input_data = _capture_video_input("instagram", "reel", video_url="https://cdn.example.com/reel.mp4")
+    assert input_data["assets"] == [{"video": {"url": "https://cdn.example.com/reel.mp4"}}]
+    assert not any("image" in asset for asset in input_data["assets"])
+
+
+def test_instagram_reel_metadata_type_is_reel():
+    input_data = _capture_video_input("instagram", "reel")
+    assert input_data["metadata"]["instagram"]["type"] == "reel"
+
+
+def test_instagram_reel_sends_no_link_attachment():
+    input_data = _capture_video_input("instagram", "reel", link="https://example.com/app")
+    assert "link" not in input_data["metadata"]["instagram"]
+    assert "linkAttachment" not in input_data["metadata"]["instagram"]
+
+
+def test_tiktok_uses_video_asset_not_image():
+    input_data = _capture_video_input("tiktok", "video", video_url="https://cdn.example.com/reel.mp4")
+    assert input_data["assets"] == [{"video": {"url": "https://cdn.example.com/reel.mp4"}}]
+    assert not any("image" in asset for asset in input_data["assets"])
+
+
+def test_tiktok_metadata_has_only_ai_generated_flag():
+    input_data = _capture_video_input("tiktok", "video")
+    # TikTokPostMetadataInput (schema-confirmed) has only "title" and
+    # "isAiGenerated" -- no "type" field, since TikTok channels only
+    # accept video posts. Assert no unsupported/invented fields exist.
+    assert input_data["metadata"]["tiktok"] == {"isAiGenerated": True}
+
+
+def test_tiktok_sends_no_link_attachment():
+    input_data = _capture_video_input("tiktok", "video", link="https://example.com/app")
+    assert "link" not in input_data["metadata"]["tiktok"]
+    assert "linkAttachment" not in input_data["metadata"]["tiktok"]
+
+
+def test_image_and_video_url_both_supplied_raises():
+    with pytest.raises(ValueError):
+        buffer_client.buffer_create_post(
+            channel_id="chan-1",
+            caption="caption text",
+            service="facebook",
+            post_type="reel",
+            due_at_iso="2026-07-10T13:00:00Z",
+            image_url="https://example.com/image.jpg",
+            video_url="https://cdn.example.com/reel.mp4",
+        )
+
+
+def test_neither_image_nor_video_url_supplied_raises():
+    with pytest.raises(ValueError):
+        buffer_client.buffer_create_post(
+            channel_id="chan-1",
+            caption="caption text",
+            service="facebook",
+            post_type="reel",
+            due_at_iso="2026-07-10T13:00:00Z",
+        )
+
+
+def test_same_uploaded_video_url_reused_across_three_calls():
+    video_url = "https://cdn.example.com/same-reel.mp4"
+    fb_input = _capture_video_input("facebook", "reel", video_url=video_url)
+    ig_input = _capture_video_input("instagram", "reel", video_url=video_url)
+    tiktok_input = _capture_video_input("tiktok", "video", video_url=video_url)
+
+    assert fb_input["assets"] == [{"video": {"url": video_url}}]
+    assert ig_input["assets"] == [{"video": {"url": video_url}}]
+    assert tiktok_input["assets"] == [{"video": {"url": video_url}}]
+

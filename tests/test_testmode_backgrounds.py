@@ -50,7 +50,7 @@ def _ad_copy():
 
 def test_testmode_allows_supabase_list_and_download_but_no_external_writes(isolated_database, monkeypatch, capsys):
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", True)
-    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode: None)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
 
     calls = {"supabase": 0, "list": 0, "download": 0}
@@ -120,7 +120,7 @@ def test_testmode_allows_supabase_list_and_download_but_no_external_writes(isola
 
 def test_production_background_source_unchanged(isolated_database, tmp_path, monkeypatch):
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
-    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode: None)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
 
     called = {"supabase": 0, "list": 0}

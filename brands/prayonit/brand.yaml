@@ -56,10 +56,14 @@ output:
 # ---------------------------------------------------------------------
 copy:
   primary_cta: "COME PRAY WITH ME"
+  visual_destination_text: "Start your prayer at\nprayonit.app"
   facebook_cta: "Come pray with me."
-  instagram_cta: "Come pray with me.\nLink in bio."
   threads_cta: "Come pray with me."
+  instagram_cta: "Come pray with me.\nLink in bio."
   story_cta: "COME PRAY WITH ME"
-  reel_cta: "Come pray with me.\nLink in bio."
-  tiktok_cta: "Come pray with me.\nLink in bio."
-  destination_url: "https://prayonit.nextwavestudiosapp.com"
+  story_destination_text: "Start your prayer at\nprayonit.app"
+  reel_cta: "COME PRAY WITH ME"
+  reel_destination_text: "Link in bio"
+  tiktok_cta: "COME PRAY WITH ME"
+  tiktok_destination_text: "Link in bio"
+  destination_url: "https://prayonit.app"
