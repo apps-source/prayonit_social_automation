@@ -1399,6 +1399,20 @@ def _strip_duplicate_download_cta_sentences(text: str) -> str:
     return " ".join(kept).strip()
 
 
+def _normalize_cta_text(text: str) -> str:
+    normalized = (text or "").replace("’", "'").replace("‘", "'")
+    normalized = re.sub(r"\s+", " ", normalized.strip().lower())
+    return normalized.rstrip(".! ")
+
+
+def contains_normalized_cta(text: str, cta: str) -> bool:
+    normalized_cta = _normalize_cta_text(cta)
+    if not normalized_cta:
+        return False
+    normalized_text = _normalize_cta_text(text)
+    return normalized_text.endswith(normalized_cta)
+
+
 def build_platform_captions(
     ad_copy: Dict[str, str],
     selection: Dict[str, Any],
@@ -1427,7 +1441,8 @@ def build_platform_captions(
     # consistently, with no trial-first or download-first language at all.
     facebook_body = _strip_duplicate_download_cta_sentences(facebook_body)
     facebook_body = _strip_forbidden_trial_and_download_sentences(facebook_body)
-    facebook_caption = f"{facebook_body}\n\n{config.FACEBOOK_CTA}\n{facebook_url}"
+    facebook_cta_block = "" if contains_normalized_cta(facebook_body, config.FACEBOOK_CTA) else f"\n\n{config.FACEBOOK_CTA}"
+    facebook_caption = f"{facebook_body}{facebook_cta_block}\n{facebook_url}"
 
     ig_hashtag_pool = [h for h in campaign.get("instagram_hashtags", []) if h.lower() != "#prayonit"]
     ig_count = min(len(ig_hashtag_pool), random.randint(4, 7)) if ig_hashtag_pool else 0
@@ -1443,7 +1458,8 @@ def build_platform_captions(
     # Buffer post (see buffer_client.buffer_create_post). No trial-first
     # line is appended -- the invitation-first CTA (which includes "Link in
     # bio") is the only thing appended after the body.
-    instagram_caption = f"{instagram_body}\n\n{config.INSTAGRAM_CTA}"
+    instagram_cta_block = "\n\nLink in bio." if contains_normalized_cta(instagram_body, config.FACEBOOK_CTA) else f"\n\n{config.INSTAGRAM_CTA}"
+    instagram_caption = f"{instagram_body}{instagram_cta_block}"
     if ig_hashtags:
         instagram_caption = f"{instagram_caption}\n\n{' '.join(ig_hashtags)}"
 

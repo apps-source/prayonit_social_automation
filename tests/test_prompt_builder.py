@@ -1037,6 +1037,57 @@ def test_build_platform_captions_returns_only_facebook_and_instagram():
     assert set(captions) == {"facebook", "instagram"}
 
 
+def test_facebook_existing_cta_is_not_duplicated():
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": "Some facebook body text.\n\nCome pray with me.",
+        "instagram_caption": "ig base",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    assert captions["facebook"].count("Come pray with me.") == 1
+
+
+def test_instagram_existing_cta_is_not_duplicated_and_link_in_bio_remains():
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": "fb base",
+        "instagram_caption": "Some instagram body text.\n\nCome pray with me.",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    assert captions["instagram"].count("Come pray with me.") == 1
+    assert "Link in bio." in captions["instagram"]
+
+
+@pytest.mark.parametrize(
+    "existing_cta",
+    [
+        "COME PRAY WITH ME",
+        "Come pray with me!",
+        "come   pray   with   me",
+    ],
+)
+def test_cta_normalization_recognizes_case_punctuation_and_whitespace(existing_cta):
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": f"Some facebook body text.\n\n{existing_cta}",
+        "instagram_caption": f"Some instagram body text.\n\n{existing_cta}",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    assert captions["facebook"].lower().count("come pray with me") == 1
+    assert captions["instagram"].lower().count("come pray with me") == 1
+
+
+def test_absent_cta_is_appended_exactly_once():
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": "Some facebook body text.",
+        "instagram_caption": "Some instagram body text.",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    assert captions["facebook"].count("Come pray with me.") == 1
+    assert captions["instagram"].count("Come pray with me.") == 1
+
+
 def test_gemini_invented_urls_are_stripped_from_all_captions():
     selection = _fake_selection()
     ad_copy = {
@@ -1062,6 +1113,29 @@ def test_exact_configured_url_is_appended_per_platform():
     # Instagram); the same URL is instead placed in Buffer's
     # metadata.instagram.link. See test_buffer_client.py.
     assert urls["instagram"] not in captions["instagram"]
+
+
+def test_hashtags_remain_unchanged_when_instagram_cta_already_exists():
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": "fb base",
+        "instagram_caption": "Some instagram body text.\n\nCome pray with me.",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    hashtags = [w for w in captions["instagram"].split() if w.startswith("#")]
+    assert "#Prayonit" in hashtags
+    assert len(hashtags) >= 1
+
+
+def test_unrelated_repeated_text_is_not_removed():
+    selection = _fake_selection()
+    ad_copy = {
+        "facebook_caption": "Hold on. Hold on.\n\nCome pray with me.",
+        "instagram_caption": "Stay steady. Stay steady.\n\nCome pray with me.",
+    }
+    captions = prompt_builder.build_platform_captions(ad_copy, selection, _fake_platform_urls())
+    assert "Hold on. Hold on." in captions["facebook"]
+    assert "Stay steady. Stay steady." in captions["instagram"]
 def test_tracking_disabled_all_active_captions_use_same_destination_url():
     selection = _fake_selection()
     ad_copy = {
