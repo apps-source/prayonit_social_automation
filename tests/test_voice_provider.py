@@ -81,6 +81,64 @@ def test_narration_preserves_segment_order():
     ]
 
 
+def test_narration_text_includes_bridge_every_script_segment_and_closing_line():
+    text = voice_provider.build_narration_text(_long_copy())
+    assert text == (
+        "Let this prayer meet you right where you are.\n\n"
+        "Lord, steady my heart today.\n\n"
+        "Give me peace and strength for what is ahead.\n\n"
+        "Amen."
+    )
+
+
+def test_multi_sentence_script_segment_remains_intact():
+    text = voice_provider.build_narration_text(
+        _long_copy(
+            script_segments=[
+                "When you start your morning carrying the weight of scarcity, it's hard to settle your mind. "
+                "You wonder if what you have will be enough for today."
+            ]
+        )
+    )
+    assert (
+        "When you start your morning carrying the weight of scarcity, it's hard to settle your mind. "
+        "You wonder if what you have will be enough for today."
+    ) in text
+
+
+def test_unicode_punctuation_is_preserved_in_narration_text():
+    text = voice_provider.build_narration_text(
+        _long_copy(
+            bridge_line="It’s easy for an unsettled mind to overshadow a quiet morning.",
+            script_segments=["Don’t lose heart. God’s peace is near."],
+            closing_line="Amen…",
+        )
+    )
+    assert "It’s easy for an unsettled mind to overshadow a quiet morning." in text
+    assert "Don’t lose heart. God’s peace is near." in text
+    assert text.endswith("Amen…")
+
+
+def test_validate_narration_transcript_requires_units_once_and_in_order():
+    units = [
+        "Bridge line.",
+        "Second sentence stays here. Third sentence stays too.",
+        "Amen.",
+    ]
+    transcript = "\n\n".join(units)
+    voice_provider.validate_narration_transcript(units, transcript)
+
+
+def test_validate_narration_transcript_fails_when_unit_is_missing():
+    units = ["Bridge line.", "Missing middle sentence.", "Amen."]
+    transcript = "Bridge line.\n\nAmen."
+    try:
+        voice_provider.validate_narration_transcript(units, transcript)
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "validation failed" in str(exc).lower()
+
+
 def test_prayer_director_note_includes_conviction_authority_and_no_whisper():
     scene = voice_provider.PRAYER_STYLE_INSTRUCTION
     lower = scene.lower()
@@ -137,6 +195,7 @@ def test_sample_context_is_not_part_of_narrated_transcript():
     transcript = prompt.split("## Transcript:\n", 1)[1]
     assert "God sees your burden." not in transcript
     assert "Let this prayer meet you right where you are." in transcript
+    assert transcript.startswith("Let this prayer meet you right where you are.")
 
 
 def test_director_note_headings_are_not_narrated():
@@ -150,6 +209,44 @@ def test_director_note_headings_are_not_narrated():
     assert "# Director's note" not in transcript
     assert "## Scene:" not in transcript
     assert "## Sample Context:" not in transcript
+
+
+def test_tts_prompt_instructs_gemini_not_to_skip_or_omit_sentences():
+    prompt = voice_provider.build_tts_prompt(
+        voice_provider.build_narration_text(_long_copy()),
+        "charismatic_prayer",
+        _long_copy(),
+    )
+    assert "Read every sentence in the Transcript exactly once, in order." in prompt
+    assert "Do not skip, summarize, paraphrase, or omit any sentence." in prompt
+
+
+def test_transcript_is_final_section_of_tts_prompt():
+    prompt = voice_provider.build_tts_prompt(
+        voice_provider.build_narration_text(_long_copy()),
+        "charismatic_prayer",
+        _long_copy(),
+    )
+    before, transcript = prompt.split("## Transcript:\n", 1)
+    assert "## Sample Context:" in before
+    assert transcript == voice_provider.build_narration_text(_long_copy())
+
+
+def test_sample_context_does_not_replace_transcript_content():
+    copy = _long_copy(
+        opening_hook="It is easy for an unsettled mind to overshadow a quiet morning.",
+        bridge_line="When you start your morning carrying the weight of scarcity, it's hard to settle your mind.",
+        script_segments=["You wonder if what you have will be enough for today."],
+    )
+    prompt = voice_provider.build_tts_prompt(
+        voice_provider.build_narration_text(copy),
+        "charismatic_prayer",
+        copy,
+    )
+    transcript = prompt.split("## Transcript:\n", 1)[1]
+    assert "It is easy for an unsettled mind to overshadow a quiet morning." not in transcript
+    assert "When you start your morning carrying the weight of scarcity, it's hard to settle your mind." in transcript
+    assert "You wonder if what you have will be enough for today." in transcript
 
 
 def test_temperature_defaults_to_one(monkeypatch):
@@ -278,6 +375,27 @@ def test_generate_with_gemini_uses_primary_key_and_temperature(monkeypatch, tmp_
     assert "## Transcript:" in kwargs["contents"]
     assert "God sees your burden." in kwargs["contents"]
     assert "Come pray with me." not in kwargs["contents"]
+    assert "Read every sentence in the Transcript exactly once, in order." in kwargs["contents"]
+
+
+def test_generate_with_gemini_raises_before_api_call_when_transcript_is_missing_a_unit(monkeypatch, tmp_path):
+    fake_client = MagicMock()
+    monkeypatch.setattr(voice_provider, "_gemini_client", None)
+    monkeypatch.setattr(voice_provider, "_get_gemini_client", lambda: fake_client)
+
+    try:
+        voice_provider._generate_with_gemini(
+            "Let this prayer meet you right where you are.\n\nAmen.",
+            "Orus",
+            voice_provider.PRAYER_STYLE_INSTRUCTION,
+            tmp_path / "voice.wav",
+            copy=_long_copy(),
+            model_name="gemini-3.1-flash-tts-preview",
+        )
+        assert False, "expected RuntimeError"
+    except RuntimeError as exc:
+        assert "validation failed" in str(exc).lower()
+    assert fake_client.models.generate_content.call_count == 0
 
 
 def test_gemini_tts_uses_primary_key_when_legacy_key_is_absent(monkeypatch):
@@ -397,3 +515,108 @@ def test_test_mode_makes_no_gemini_tts_call(isolated_database, monkeypatch, tmp_
 
     result = prayonit_social.cmd_run("morning")
     assert result == 0
+
+
+def test_preview_mode_logs_narration_units_without_calling_tts(isolated_database, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(prayonit_social.config, "TEST_MODE", True)
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", True)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", True)
+    monkeypatch.setattr(prayonit_social.config, "VOICE_ENABLED", False)
+    monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
+    monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
+    monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())
+    monkeypatch.setattr(prayonit_social, "list_backgrounds", lambda supabase: ["bg.jpg"])
+    monkeypatch.setattr(
+        prayonit_social.campaign_engine,
+        "choose_selection",
+        lambda slot: {
+            "campaign": {
+                "name": "Anxiety",
+                "pain_point": "anxious",
+                "goal": "peace",
+                "hooks": ["h"],
+                "body_angles": ["b"],
+                "ctas": ["c"],
+                "thread_topics": ["t"],
+                "instagram_hashtags": ["#Prayonit"],
+            },
+            "formula": {"name": "f"},
+            "persona": {"name": "p"},
+            "seasonal_context": None,
+            "hook": "h",
+            "body_angle": "b",
+            "cta": "c",
+            "thread_topic": "t",
+            "relaxed_rules": [],
+            "emotional_territory": "insomnia",
+        },
+    )
+    monkeypatch.setattr(
+        prayonit_social.campaign_engine,
+        "choose_background",
+        lambda *args, **kwargs: {
+            "path": "bg.jpg",
+            "metadata": {"time": "morning", "visual_types": ["lake"], "emotional_suitability": ["insomnia"]},
+            "match_score": 3.0,
+            "emotional_territory": "insomnia",
+        },
+    )
+    monkeypatch.setattr(prayonit_social.campaign_engine, "pick_spiritual_action", lambda campaign, slot: "Bring it to God.")
+    monkeypatch.setattr(prayonit_social.prompt_builder, "generate_local_ad_copy", lambda selection, slot: _long_copy())
+    monkeypatch.setattr(prayonit_social.prompt_builder, "build_platform_captions", lambda *args, **kwargs: {"facebook": "f", "instagram": "i"})
+    monkeypatch.setattr(prayonit_social.image_renderer, "load_background", lambda path: __import__("PIL").Image.new("RGB", (1080, 1350), (0, 0, 0)))
+    monkeypatch.setattr(prayonit_social.image_renderer, "crop_to_canvas", lambda image, canvas_size=(1080, 1350): image)
+    monkeypatch.setattr(prayonit_social.image_renderer, "compose_ad", lambda background, copy: __import__("PIL").Image.new("RGB", (1080, 1350), (0, 0, 0)))
+    monkeypatch.setattr(prayonit_social.image_renderer, "compose_story_ad", lambda background, copy: __import__("PIL").Image.new("RGB", (1080, 1920), (0, 0, 0)))
+    monkeypatch.setattr(prayonit_social.image_renderer, "compute_local_contrast_metrics", lambda image, kind: {"overall_pass": True, "zones": {}})
+    monkeypatch.setattr(prayonit_social.creative_engine_v3, "build_prepublish_qa_report", lambda **kwargs: {"critical_failures": [], "pass": True, "score": 100})
+    monkeypatch.setattr(prayonit_social.tracking, "create_tracked_link", lambda **kwargs: (_ for _ in ()).throw(AssertionError("tracking called")))
+    monkeypatch.setattr(prayonit_social.image_renderer, "upload_generated", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("upload called")))
+    monkeypatch.setattr(prayonit_social.image_renderer, "upload_generated_video", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("video upload called")))
+    monkeypatch.setattr(prayonit_social.buffer_client, "buffer_create_post", lambda **kwargs: (_ for _ in ()).throw(AssertionError("buffer called")))
+    monkeypatch.setattr(
+        prayonit_social.content_engine,
+        "get_todays_content",
+        lambda slot, now=None, weekly_rhythm=None: {
+            "content_type": "prayer_read",
+            "theme": "strength",
+            "emotion": "overwhelmed",
+            "hook_style": "recognition",
+            "objective": "obj",
+            "video_template": "long_prayer",
+            "video_library": "long",
+            "duration_seconds": 30,
+            "marketing_enabled": False,
+            "show_logo": True,
+            "show_badges": False,
+            "show_cta": True,
+            "show_link_in_bio": True,
+            "show_app_benefit": False,
+            "engagement_prompt_enabled": True,
+            "engagement_prompt_type": "save_or_share",
+            "cta_text": "Come pray with me.",
+        },
+    )
+    motion_dir = tmp_path / "motion_backgrounds"
+    motion_dir.mkdir()
+    (motion_dir / "bg1.mp4").write_bytes(b"fake")
+    monkeypatch.setattr(prayonit_social.config, "MOTION_BACKGROUNDS_DIR", motion_dir)
+
+    def fake_render_long_form_video(**kwargs):
+        out_path = Path(kwargs["output_path"])
+        out_path.write_bytes(b"x")
+        return out_path
+
+    monkeypatch.setattr("long_form_renderer.render_long_form_video", fake_render_long_form_video)
+
+    result = prayonit_social.cmd_run("morning")
+    out = capsys.readouterr().out
+
+    assert result == 0
+    assert "Narration units:" in out
+    assert "- bridge_line: Let this prayer meet you right where you are." in out
+    assert "- script_segments[0]: Lord, steady my heart today." in out
+    assert "- script_segments[1]: Give me peace and strength for what is ahead." in out
+    assert "- closing_line: Amen." in out
+    assert "Final narration transcript character count:" in out
+    assert "Final narration transcript sentence count:" in out

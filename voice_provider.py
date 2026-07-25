@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shutil
+import re
 import subprocess
 import tempfile
 import time
@@ -135,6 +136,30 @@ def build_narration_text(copy: Dict[str, Any]) -> str:
     return "\n\n".join(build_narration_segments(copy)).strip()
 
 
+def _count_sentences(text: str) -> int:
+    parts = [part.strip() for part in re.split(r"(?<=[.!?])\s+", text.strip()) if part.strip()]
+    return len(parts)
+
+
+def validate_narration_transcript(units: List[str], transcript: str) -> None:
+    normalized_units = [str(unit).strip() for unit in units if str(unit).strip()]
+    normalized_transcript = transcript.strip()
+    search_start = 0
+    for index, unit in enumerate(normalized_units):
+        if normalized_transcript.count(unit) != 1:
+            raise RuntimeError(
+                "Narration transcript validation failed before TTS API call: "
+                f"unit {index} was missing, duplicated, or altered."
+            )
+        found_at = normalized_transcript.find(unit, search_start)
+        if found_at == -1:
+            raise RuntimeError(
+                "Narration transcript validation failed before TTS API call: "
+                f"unit {index} was out of order or missing."
+            )
+        search_start = found_at + len(unit)
+
+
 def build_sample_context(copy: Dict[str, Any]) -> str:
     opening_hook = str(copy.get("opening_hook", "")).strip()
     bridge_line = str(copy.get("bridge_line", "")).strip()
@@ -174,6 +199,8 @@ def build_tts_prompt(text: str, style_profile: str, copy: Optional[Dict[str, Any
         f"{profile['scene']}\n\n"
         "## Sample Context:\n"
         f"{sample_context}\n\n"
+        "Read every sentence in the Transcript exactly once, in order. "
+        "Do not skip, summarize, paraphrase, or omit any sentence.\n\n"
         "## Transcript:\n"
         f"{transcript}"
     )
@@ -271,11 +298,20 @@ def _generate_with_gemini(
     model_name: Optional[str] = None,
 ) -> Path:
     style_profile = select_style_profile(copy) if copy else _style_profile_from_instruction(style_instruction)
+    if copy is not None:
+        validate_narration_transcript(build_narration_segments(copy), text)
     prompt = build_tts_prompt(text, style_profile, copy)
     temperature = _resolve_voice_temperature()
     print(f"Gemini TTS voice: {voice_name}")
     print(f"Gemini TTS style profile: {style_profile}")
     print(f"Gemini TTS temperature: {temperature:g}")
+    if config.PREVIEW_MODE:
+        print(f"Final narration transcript character count: {len(text.strip())}")
+        print(f"Final narration transcript sentence count: {_count_sentences(text)}")
+        print(
+            "Narration transcript integrity validated before TTS generation; "
+            "spoken-word verification was not available."
+        )
     client = _get_gemini_client()
     response = client.models.generate_content(
         model=model_name or config.VOICE_MODEL_PRIMARY or config.VOICE_MODEL,

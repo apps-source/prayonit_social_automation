@@ -144,6 +144,27 @@ def discover_local_backgrounds() -> Dict[str, Any]:
     }
 
 
+def _log_preview_narration_debug(ad_copy: Dict[str, Any], narration_text: str) -> None:
+    if not config.PREVIEW_MODE:
+        return
+    units = voice_provider.build_narration_segments(ad_copy)
+    bridge_line = str(ad_copy.get("bridge_line", "")).strip()
+    closing_line = str(ad_copy.get("closing_line", "")).strip()
+    script_segments = [
+        str(segment).strip()
+        for segment in ad_copy.get("script_segments", [])
+        if str(segment).strip()
+    ]
+    print("Narration units:")
+    print(f"- bridge_line: {bridge_line}")
+    for index, segment in enumerate(script_segments):
+        print(f"- script_segments[{index}]: {segment}")
+    print(f"- closing_line: {closing_line}")
+    print(f"Final narration transcript character count: {len(narration_text)}")
+    print(f"Final narration transcript sentence count: {voice_provider._count_sentences(narration_text)}")
+    voice_provider.validate_narration_transcript(units, narration_text)
+
+
 def build_arg_parser():
     parser = argparse.ArgumentParser(description="Prayonit Marketing Engine v1.0")
     subparsers = parser.add_subparsers(dest="command")
@@ -499,6 +520,7 @@ def cmd_run(slot) -> int:
                 narration_duration = None
                 narration_segment_timeline = None
                 narration_text = voice_provider.build_narration_text(ad_copy)
+                _log_preview_narration_debug(ad_copy, narration_text)
                 if config.VOICE_ENABLED and narration_text:
                     audio_filename = config.OUTPUT_AUDIO_DIR / "prayonit-{0}-voice-{1}.wav".format(
                         filename_suffix,
