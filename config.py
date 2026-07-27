@@ -194,6 +194,12 @@ VIDEO_ENABLED = os.getenv("VIDEO_ENABLED", "false").strip().lower() == "true"
 # safety behavior. Defaults to false so existing behavior is unchanged
 # unless explicitly opted in.
 VIDEO_PUBLISH_ENABLED = os.getenv("VIDEO_PUBLISH_ENABLED", "false").strip().lower() == "true"
+SOCIAL_OUTPUT_MODE = os.getenv("SOCIAL_OUTPUT_MODE", "reels_only").strip().lower() or "reels_only"
+TIKTOK_MANUAL_HANDOFF = os.getenv("TIKTOK_MANUAL_HANDOFF", "false").strip().lower() == "true"
+TIKTOK_IMPORT_TO_PHOTOS = os.getenv("TIKTOK_IMPORT_TO_PHOTOS", "false").strip().lower() == "true"
+TIKTOK_PHOTOS_ALBUM_NAME = os.getenv("TIKTOK_PHOTOS_ALBUM_NAME", "Prayonit TikTok Ready").strip() or "Prayonit TikTok Ready"
+TIKTOK_CREATE_APPLE_NOTE = os.getenv("TIKTOK_CREATE_APPLE_NOTE", "false").strip().lower() == "true"
+TIKTOK_NOTES_FOLDER_NAME = os.getenv("TIKTOK_NOTES_FOLDER_NAME", "Prayonit TikTok Ready").strip() or "Prayonit TikTok Ready"
 
 # ---------- Long-form voiceover (Phase: Gemini TTS / local-only rollout) ----------
 # Voice is disabled by default so the existing long-form compositor stays
@@ -230,6 +236,7 @@ OUTPUT_VIDEOS_LONG_DIR = OUTPUT_VIDEOS_DIR / "long"
 OUTPUT_AUDIO_DIR = OUTPUT_DIR / "audio"
 OUTPUT_PREVIEWS_DIR = OUTPUT_DIR / "previews"
 OUTPUT_TEMP_DIR = OUTPUT_DIR / "temp"
+OUTPUT_TIKTOK_HANDOFF_DIR = OUTPUT_DIR / "tiktok_handoff"
 for _generated_output_dir in (
     OUTPUT_IMAGES_FEED_DIR,
     OUTPUT_IMAGES_STORY_DIR,
@@ -238,6 +245,7 @@ for _generated_output_dir in (
     OUTPUT_AUDIO_DIR,
     OUTPUT_PREVIEWS_DIR,
     OUTPUT_TEMP_DIR,
+    OUTPUT_TIKTOK_HANDOFF_DIR,
 ):
     _generated_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -321,8 +329,9 @@ def require_env(test_mode: bool, preview_mode: bool = False) -> None:
         # when video publishing is disabled, matching the Phase 2A design
         # where TikTok is one of three video-only destinations queued
         # alongside Facebook Reel/Instagram Reel.
-        if VIDEO_PUBLISH_ENABLED:
-            required.append("BUFFER_TIKTOK_CHANNEL_ID")
+        if VIDEO_PUBLISH_ENABLED and SOCIAL_OUTPUT_MODE == "full":
+            if not TIKTOK_MANUAL_HANDOFF:
+                required.append("BUFFER_TIKTOK_CHANNEL_ID")
     missing = [name for name in required if not os.getenv(name)]
     if not get_gemini_primary_api_key():
         missing.append("Gemini API key")

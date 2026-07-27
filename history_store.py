@@ -26,6 +26,17 @@ SCHEMA_STATEMENTS = [
         selected_body_angle TEXT,
         selected_cta TEXT,
         selected_thread_topic TEXT,
+        selected_creator_search_topic TEXT,
+        resolved_brief_json TEXT,
+        pain_point_id TEXT,
+        life_moment_id TEXT,
+        life_moment_text TEXT,
+        hook_style TEXT,
+        content_type TEXT,
+        campaign_id TEXT,
+        cta_text TEXT,
+        destination_url TEXT,
+        voice_style_profile TEXT,
         background_object_path TEXT,
         generated_feed_object_path TEXT,
         generated_story_object_path TEXT,
@@ -135,6 +146,24 @@ def initialize_database() -> None:
             conn.execute(
                 "ALTER TABLE campaigns_used ADD COLUMN generated_video_object_path TEXT"
             )
+        if "selected_creator_search_topic" not in existing_columns:
+            conn.execute(
+                "ALTER TABLE campaigns_used ADD COLUMN selected_creator_search_topic TEXT"
+            )
+        for column_name in (
+            "resolved_brief_json",
+            "pain_point_id",
+            "life_moment_id",
+            "life_moment_text",
+            "hook_style",
+            "content_type",
+            "campaign_id",
+            "cta_text",
+            "destination_url",
+            "voice_style_profile",
+        ):
+            if column_name not in existing_columns:
+                conn.execute(f"ALTER TABLE campaigns_used ADD COLUMN {column_name} TEXT")
 
 
 def create_run_record(
@@ -149,10 +178,14 @@ def create_run_record(
     selected_body_angle: Optional[str] = None,
     selected_cta: Optional[str] = None,
     selected_thread_topic: Optional[str] = None,
+    selected_creator_search_topic: Optional[str] = None,
     background_object_path: Optional[str] = None,
+    resolved_brief: Optional[Dict[str, Any]] = None,
     status: str = "in_progress",
 ) -> int:
     """Insert a new campaigns_used row and return its id."""
+    if resolved_brief and selected_creator_search_topic is None:
+        selected_creator_search_topic = resolved_brief.get("creator_search_topic")
     with _connect() as conn:
         cursor = conn.execute(
             """
@@ -160,8 +193,11 @@ def create_run_record(
                 run_id, created_at_utc, slot, campaign_name, formula_name,
                 persona_name, seasonal_context, selected_hook,
                 selected_body_angle, selected_cta, selected_thread_topic,
-                background_object_path, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                selected_creator_search_topic, background_object_path,
+                resolved_brief_json, pain_point_id, life_moment_id,
+                life_moment_text, hook_style, content_type, campaign_id,
+                cta_text, destination_url, voice_style_profile, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -175,7 +211,18 @@ def create_run_record(
                 selected_body_angle,
                 selected_cta,
                 selected_thread_topic,
+                selected_creator_search_topic,
                 background_object_path,
+                json.dumps(resolved_brief) if resolved_brief else None,
+                (resolved_brief or {}).get("pain_point_id"),
+                (resolved_brief or {}).get("life_moment_id"),
+                (resolved_brief or {}).get("life_moment_text"),
+                (resolved_brief or {}).get("hook_style_label"),
+                (resolved_brief or {}).get("content_type"),
+                (resolved_brief or {}).get("campaign_id"),
+                (resolved_brief or {}).get("cta_text"),
+                (resolved_brief or {}).get("destination_url"),
+                (resolved_brief or {}).get("voice_style_profile"),
                 status,
             ),
         )

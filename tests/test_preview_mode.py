@@ -181,6 +181,7 @@ def test_production_path_still_uses_generate_ad_copy_and_reaches_uploads(isolate
     proceeds past the early-return guard to uploads/Buffer."""
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
     monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", False)
+    monkeypatch.setattr(prayonit_social.config, "SOCIAL_OUTPUT_MODE", "full")
     monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
     monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     _patch_common_pipeline(monkeypatch)

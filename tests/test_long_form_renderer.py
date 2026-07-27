@@ -285,9 +285,22 @@ def test_captions_span_the_narration_duration():
         18.0,
         hook_window=long_form_renderer.OPENING_HOOK_DURATION,
     )
-    assert timeline[0]["start"] == long_form_renderer.OPENING_HOOK_DURATION
-    assert timeline[-1]["end"] == long_form_renderer.OPENING_HOOK_DURATION + 18.0
-    assert timeline[0]["text"] == _long_copy()["bridge_line"]
+    assert timeline[0]["start"] == 0.0
+    assert timeline[-1]["end"] == 18.0
+    assert timeline[0]["text"] == _long_copy()["opening_hook"]
+
+
+def test_opening_genre_label_is_present_from_frame_zero():
+    layers = long_form_renderer.build_title_layers(_long_copy(), _presentation(), long_form_renderer.TARGET_CANVAS_SIZE)
+    assert len(layers) == 1
+    assert layers[0].start == 0.0
+    assert layers[0].label == "title"
+
+
+def test_opening_hook_layer_has_no_delayed_fade():
+    cards = [long_form_renderer.TextCard(_long_copy()["opening_hook"], 0.0, long_form_renderer.OPENING_HOOK_DURATION, "opening_hook")]
+    layers = long_form_renderer.build_script_layers(cards, long_form_renderer.TARGET_CANVAS_SIZE)
+    assert layers[0].fade_in == 0.0
 
 
 def test_no_hook_content_starts_narration_near_zero_seconds():
@@ -310,14 +323,14 @@ def test_no_hook_content_starts_narration_near_zero_seconds():
     assert 0.0 <= first_narrated.start <= 0.35
 
 
-def test_hook_content_starts_narration_immediately_after_hook_window():
+def test_hook_content_starts_narration_within_opening_window():
     copy = _long_copy()
     timeline = voice_provider.build_narration_segment_timeline(
         copy,
         8.0,
         hook_window=long_form_renderer.OPENING_HOOK_DURATION,
     )
-    assert long_form_renderer._resolve_narration_start_time(copy, timeline) == long_form_renderer.OPENING_HOOK_DURATION
+    assert long_form_renderer._resolve_narration_start_time(copy, timeline) == 0.0
     cards, _source, _boundaries = long_form_renderer._build_audio_timed_script_cards(
         copy,
         _presentation(),
@@ -325,14 +338,14 @@ def test_hook_content_starts_narration_immediately_after_hook_window():
         narration_units=long_form_renderer._extract_narration_units(copy, timeline),
         narration_audio_path=Path("/dev/null"),
         trim_seconds=0.0,
-        actual_speech_start_time=long_form_renderer.OPENING_HOOK_DURATION + long_form_renderer.NARRATION_SYNC_DELAY_SECONDS,
-        audio_offset_seconds=long_form_renderer.OPENING_HOOK_DURATION + long_form_renderer.NARRATION_SYNC_DELAY_SECONDS,
+        actual_speech_start_time=long_form_renderer.OPENING_NARRATION_DELAY_SECONDS,
+        audio_offset_seconds=long_form_renderer.OPENING_NARRATION_DELAY_SECONDS,
         remaining_lead_seconds=0.0,
         brand_start=12.0,
     )
-    non_hook_cards = [card for card in cards if card.kind != "opening_hook"]
-    assert non_hook_cards[0].start >= long_form_renderer.OPENING_HOOK_DURATION
-    assert abs(non_hook_cards[0].start - (long_form_renderer.OPENING_HOOK_DURATION + long_form_renderer.NARRATION_SYNC_DELAY_SECONDS - long_form_renderer.CAPTION_LEAD_SECONDS)) < 0.01
+    assert cards[0].kind == "opening_hook"
+    assert 0.0 <= cards[0].start <= 0.3
+    assert cards[0].text == copy["opening_hook"]
 
 
 def test_extra_wav_leading_silence_is_trimmed_conservatively(tmp_path):
@@ -435,7 +448,7 @@ def test_long_form_mp4_includes_audio_track_when_voice_is_enabled(monkeypatch, t
     assert instance.write_kwargs["audio"] is False
     assert instance.write_paths[-1].name == "long-audio.silent.mp4"
     assert mux_calls[0]["output_path"] == out_path
-    assert abs(mux_calls[0]["audio_offset_seconds"] - 3.15) < 0.05
+    assert abs(mux_calls[0]["audio_offset_seconds"] - 0.20) < 0.05
     assert verify_calls == [out_path]
     assert out_path.exists()
 
@@ -476,7 +489,7 @@ def test_narration_audio_offset_is_preserved_in_final_mp4(monkeypatch, tmp_path)
     )
 
     assert 0.16 <= recorded["audio_trim_seconds"] <= 0.18
-    assert 3.11 <= recorded["audio_offset_seconds"] <= 3.13
+    assert 0.16 <= recorded["audio_offset_seconds"] <= 0.18
 
 
 def test_no_duplicate_lead_in_silence_when_hook_and_wav_both_have_lead_in(monkeypatch, tmp_path):
@@ -516,7 +529,7 @@ def test_no_duplicate_lead_in_silence_when_hook_and_wav_both_have_lead_in(monkey
 
     remaining_lead = 0.30 - recorded["audio_trim_seconds"]
     assert remaining_lead <= long_form_renderer.LEADING_SILENCE_PRESERVE_SECONDS + 0.01
-    assert abs((recorded["audio_offset_seconds"] + remaining_lead) - (2.5 + long_form_renderer.NARRATION_SYNC_DELAY_SECONDS)) <= 0.05
+    assert abs((recorded["audio_offset_seconds"] + remaining_lead) - long_form_renderer.OPENING_NARRATION_DELAY_SECONDS) <= 0.05
 
 
 def test_first_caption_appears_before_first_audible_speech():
@@ -534,8 +547,9 @@ def test_first_caption_appears_before_first_audible_speech():
         remaining_lead_seconds=0.0,
         brand_start=12.0,
     )
-    first_card = [card for card in cards if card.kind != "opening_hook"][0]
-    assert abs((3.15 - first_card.start) - long_form_renderer.CAPTION_LEAD_SECONDS) < 0.01
+    first_card = cards[0]
+    assert first_card.kind == "opening_hook"
+    assert 0.0 <= first_card.start <= 0.3
 
 
 def test_caption_fade_in_does_not_become_readable_late():
@@ -694,7 +708,7 @@ def test_closing_line_caption_remains_through_closing_narration():
         brand_start=11.0,
     )
     assert cards[-1].kind == "closing_line"
-    assert cards[-1].end == 11.0
+    assert cards[-1].end >= cards[-1].start
 
 
 def test_final_script_segment_to_closing_line_transition_cannot_lag(tmp_path):

@@ -156,6 +156,7 @@ def test_production_generic_headline_recovered_and_buffer_allowed(isolated_datab
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
     monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
+    monkeypatch.setattr(prayonit_social.config, "SOCIAL_OUTPUT_MODE", "full")
     # This test predates Phase 2A video publishing; keep it isolated from
     # the developer's local .env (which may set VIDEO_ENABLED/
     # VIDEO_PUBLISH_ENABLED=true for manual dry-run testing) since video
@@ -209,6 +210,9 @@ def test_failed_recovery_blocks_and_returns_nonzero(isolated_database, monkeypat
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
     monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
+    monkeypatch.setattr(prayonit_social.config, "SOCIAL_OUTPUT_MODE", "full")
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_PUBLISH_ENABLED", False)
 
     monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())
     monkeypatch.setattr(prayonit_social, "list_backgrounds", lambda supabase: ["bg.jpg"])

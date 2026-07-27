@@ -34,6 +34,7 @@ SAFE_ZONE_RIGHT_FRAC = 0.15
 SAFE_ZONE_MAX_TEXT_WIDTH_FRAC = 1.0 - (2 * SAFE_ZONE_RIGHT_FRAC)
 
 OPENING_HOOK_DURATION = 2.5
+OPENING_NARRATION_DELAY_SECONDS = 0.2
 BRIDGE_LINE_DURATION = 2.0
 FINAL_BRAND_DURATION = 4.0
 MIN_TOTAL_DURATION = 20.0
@@ -475,14 +476,14 @@ def resolve_long_form_duration(
 
 def _content_label(presentation_config: Dict[str, Any]) -> str:
     content_type = str(presentation_config.get("content_type", "")).strip()
-    labels = {
-        "prayer_read": "Prayer",
-        "night_prayer_or_rest": "Night Prayer",
-        "devotional_read": "Devotional",
-        "gratitude_reflection": "Reflection",
-        "hope_encouragement": "Encouragement",
-    }
-    return labels.get(content_type, "Prayer")
+    slot = str(presentation_config.get("slot", "")).strip().lower()
+    if content_type in {"prayer_read", "night_prayer_or_rest"}:
+        return "PRAYER BEFORE BED" if slot == "evening" else "MORNING PRAYER"
+    if content_type in {"devotional_read", "gratitude_reflection"}:
+        return "EVENING REFLECTION" if slot == "evening" else "TODAY'S WORD"
+    if content_type == "hope_encouragement":
+        return "TODAY'S ENCOURAGEMENT"
+    return "MORNING PRAYER"
 
 
 def list_long_form_video_candidates(
@@ -776,7 +777,7 @@ def build_script_layers(
                 position=(x, y),
                 start=card.start,
                 end=card.end,
-                fade_in=0.3 if card.kind == "opening_hook" else CAPTION_FADE_IN_SECONDS,
+                fade_in=0.0 if card.kind == "opening_hook" else CAPTION_FADE_IN_SECONDS,
                 fade_out=0.3 if card.kind == "opening_hook" else CAPTION_FADE_OUT_SECONDS,
                 label=card.kind,
             )
@@ -789,8 +790,6 @@ def build_title_layers(
     presentation_config: Dict[str, Any],
     canvas_size: Tuple[int, int],
 ) -> List[OverlayLayer]:
-    if str(copy.get("opening_hook", "")).strip():
-        return []
     title = _content_label(presentation_config)
     if not title:
         return []
@@ -803,8 +802,8 @@ def build_title_layers(
             image=title_img,
             position=(x, y),
             start=0.0,
-            end=2.0,
-            fade_in=0.3,
+            end=OPENING_HOOK_DURATION if str(copy.get("opening_hook", "")).strip() else 2.0,
+            fade_in=0.0,
             fade_out=0.3,
             label="title",
         )
@@ -1014,7 +1013,9 @@ def render_long_form_video(
         if detected_leading_silence > LEADING_SILENCE_FLOOR_SECONDS:
             trim_seconds = max(0.0, detected_leading_silence - LEADING_SILENCE_PRESERVE_SECONDS)
         remaining_lead = max(0.0, detected_leading_silence - trim_seconds)
-        actual_speech_start_time = intended_narration_start_time + NARRATION_SYNC_DELAY_SECONDS
+        actual_speech_start_time = intended_narration_start_time + (
+            OPENING_NARRATION_DELAY_SECONDS if str(copy.get("opening_hook", "")).strip() else 0.0
+        )
         audio_offset_seconds = max(0.0, actual_speech_start_time - remaining_lead)
         effective_audio_duration = max(0.0, wav_duration - trim_seconds)
         brand_start = max(brand_start, audio_offset_seconds + effective_audio_duration)
@@ -1113,7 +1114,10 @@ def render_long_form_video(
         if has_audio:
             print(f"Long-form narration source: {_safe_filename(narration_audio_path)}")
             print(f"Narration duration: {audio_timing['wav_duration']:.2f}s")
-            print(f"[long_form_renderer] Narration sync delay: {NARRATION_SYNC_DELAY_SECONDS:.2f}s")
+            print(
+                f"[long_form_renderer] Narration sync delay: "
+                f"{OPENING_NARRATION_DELAY_SECONDS if str(copy.get('opening_hook', '')).strip() else 0.0:.2f}s"
+            )
             print(f"[long_form_renderer] Caption lead: {CAPTION_LEAD_SECONDS:.2f}s")
             print(f"[long_form_renderer] Intended narration start time: {audio_timing['intended_narration_start_time']:.2f}s")
             print(f"[long_form_renderer] Detected WAV leading silence: {audio_timing['detected_leading_silence']:.2f}s")

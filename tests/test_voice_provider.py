@@ -54,6 +54,94 @@ def test_encouragement_selects_orus_by_default(monkeypatch):
     assert voice_provider.select_default_voice(_long_copy("encouragement")) == "Orus"
 
 
+def test_natural_conversational_profile_exists():
+    assert "natural_conversational" in voice_provider.STYLE_PROFILES
+
+
+def test_ordinary_devotional_selects_natural_conversational():
+    assert (
+        voice_provider.select_style_profile(
+            _long_copy(
+                "devotional",
+                theme="morning reflection",
+                emotion="steady",
+                script_segments=["Take a steady breath and notice God's kindness in this ordinary day."],
+            )
+        )
+        == "natural_conversational"
+    )
+
+
+def test_prayer_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("prayer")) == "natural_conversational"
+
+
+def test_devotional_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("devotional")) == "natural_conversational"
+
+
+def test_encouragement_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("encouragement")) == "natural_conversational"
+
+
+def test_morning_prayer_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("prayer", theme="morning prayer")) == "natural_conversational"
+
+
+def test_evening_prayer_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("prayer", theme="evening prayer")) == "natural_conversational"
+
+
+def test_gratitude_reflection_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("devotional", theme="gratitude reflection")) == "natural_conversational"
+
+
+def test_parenting_content_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("devotional", theme="parenting")) == "natural_conversational"
+
+
+def test_anxiety_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("encouragement", emotion="anxiety")) == "natural_conversational"
+
+
+def test_protection_selects_natural_conversational():
+    assert voice_provider.select_style_profile(_long_copy("prayer", theme="protection")) == "natural_conversational"
+
+
+def test_creative_brief_tone_does_not_change_production_profile():
+    assert (
+        voice_provider.select_style_profile(
+            _long_copy(
+                "prayer",
+                theme="protection",
+                emotion="anxiety",
+                creative_brief_tone="urgent bold declaration",
+            )
+        )
+        == "natural_conversational"
+    )
+
+
+def test_explicit_valid_override_wins():
+    assert (
+        voice_provider.select_style_profile(
+            _long_copy("devotional", theme="gratitude reflection", voice_style_profile="devotional_teacher")
+        )
+        == "devotional_teacher"
+    )
+
+
+def test_invalid_override_logs_warning_and_falls_back_safely(capsys):
+    profile = voice_provider.select_style_profile(_long_copy("devotional", voice_style_profile="dramatic_preacher"))
+    assert profile == "natural_conversational"
+    out = capsys.readouterr().out
+    assert "invalid voice_style_profile override" in out.lower()
+
+
+def test_default_style_fallback_is_natural_conversational():
+    assert voice_provider.select_style_profile({"long_form_type": "unknown"}) == "natural_conversational"
+
+
 def test_charon_remains_available_through_override(monkeypatch):
     monkeypatch.setattr(voice_provider.config, "VOICE_NAME", "")
     monkeypatch.setattr(voice_provider.config, "VOICE_NAME_PRAYER", "Charon")
@@ -74,6 +162,7 @@ def test_narration_text_excludes_branding_cta_and_engagement_lines():
 def test_narration_preserves_segment_order():
     segments = voice_provider.build_narration_segments(_long_copy())
     assert segments == [
+        "God sees your burden.",
         "Let this prayer meet you right where you are.",
         "Lord, steady my heart today.",
         "Give me peace and strength for what is ahead.",
@@ -84,6 +173,7 @@ def test_narration_preserves_segment_order():
 def test_narration_text_includes_bridge_every_script_segment_and_closing_line():
     text = voice_provider.build_narration_text(_long_copy())
     assert text == (
+        "God sees your burden.\n\n"
         "Let this prayer meet you right where you are.\n\n"
         "Lord, steady my heart today.\n\n"
         "Give me peace and strength for what is ahead.\n\n"
@@ -165,6 +255,15 @@ def test_encouragement_direction_uses_confident_hopeful_energy():
     assert "do not whisper" in lower
 
 
+def test_natural_conversational_direction_is_grounded_and_not_theatrical():
+    scene = voice_provider.NATURAL_CONVERSATIONAL_STYLE_INSTRUCTION
+    lower = scene.lower()
+    assert "steady, natural, conversational voice" in lower
+    assert "calm, clear, sincere, and grounded" in lower
+    assert "do not sound theatrical" in lower
+    assert "do not shout, yell, strain" in lower
+
+
 def test_sample_context_is_dynamically_derived_and_not_hardcoded():
     copy = _long_copy(
         opening_hook="God is still leading you.",
@@ -193,9 +292,9 @@ def test_sample_context_is_not_part_of_narrated_transcript():
         copy,
     )
     transcript = prompt.split("## Transcript:\n", 1)[1]
-    assert "God sees your burden." not in transcript
+    assert "God sees your burden." in transcript
     assert "Let this prayer meet you right where you are." in transcript
-    assert transcript.startswith("Let this prayer meet you right where you are.")
+    assert transcript.startswith("God sees your burden.")
 
 
 def test_director_note_headings_are_not_narrated():
@@ -244,7 +343,7 @@ def test_sample_context_does_not_replace_transcript_content():
         copy,
     )
     transcript = prompt.split("## Transcript:\n", 1)[1]
-    assert "It is easy for an unsettled mind to overshadow a quiet morning." not in transcript
+    assert "It is easy for an unsettled mind to overshadow a quiet morning." in transcript
     assert "When you start your morning carrying the weight of scarcity, it's hard to settle your mind." in transcript
     assert "You wonder if what you have will be enough for today." in transcript
 
@@ -376,6 +475,56 @@ def test_generate_with_gemini_uses_primary_key_and_temperature(monkeypatch, tmp_
     assert "God sees your burden." in kwargs["contents"]
     assert "Come pray with me." not in kwargs["contents"]
     assert "Read every sentence in the Transcript exactly once, in order." in kwargs["contents"]
+
+
+def test_generate_with_gemini_logs_style_selection_reason(monkeypatch, tmp_path, capsys):
+    fake_response = MagicMock()
+    fake_response.candidates = [MagicMock()]
+    fake_response.candidates[0].content.parts = [MagicMock()]
+    fake_response.candidates[0].content.parts[0].inline_data.data = b"\x00\x00" * 24000
+    fake_client = MagicMock()
+    fake_client.models.generate_content.return_value = fake_response
+
+    monkeypatch.setattr(voice_provider, "_gemini_client", None)
+    monkeypatch.setattr(voice_provider, "_get_gemini_client", lambda: fake_client)
+
+    voice_provider._generate_with_gemini(
+        voice_provider.build_narration_text(_long_copy("devotional", theme="gratitude reflection")),
+        "Orus",
+        voice_provider.DEVOTIONAL_STYLE_INSTRUCTION,
+        tmp_path / "voice.wav",
+        copy=_long_copy("devotional", theme="gratitude reflection"),
+        model_name="gemini-3.1-flash-tts-preview",
+    )
+
+    out = capsys.readouterr().out
+    assert "Gemini TTS style profile: natural_conversational" in out
+    assert "Style selection reason: unified production narration profile" in out
+
+
+def test_generate_with_gemini_logs_explicit_manual_override_reason(monkeypatch, tmp_path, capsys):
+    fake_response = MagicMock()
+    fake_response.candidates = [MagicMock()]
+    fake_response.candidates[0].content.parts = [MagicMock()]
+    fake_response.candidates[0].content.parts[0].inline_data.data = b"\x00\x00" * 24000
+    fake_client = MagicMock()
+    fake_client.models.generate_content.return_value = fake_response
+
+    monkeypatch.setattr(voice_provider, "_gemini_client", None)
+    monkeypatch.setattr(voice_provider, "_get_gemini_client", lambda: fake_client)
+
+    voice_provider._generate_with_gemini(
+        voice_provider.build_narration_text(_long_copy("devotional", voice_style_profile="devotional_teacher")),
+        "Orus",
+        voice_provider.DEVOTIONAL_STYLE_INSTRUCTION,
+        tmp_path / "voice.wav",
+        copy=_long_copy("devotional", voice_style_profile="devotional_teacher"),
+        model_name="gemini-3.1-flash-tts-preview",
+    )
+
+    out = capsys.readouterr().out
+    assert "Gemini TTS style profile: devotional_teacher" in out
+    assert "Style selection reason: explicit manual override" in out
 
 
 def test_generate_with_gemini_raises_before_api_call_when_transcript_is_missing_a_unit(monkeypatch, tmp_path):

@@ -287,6 +287,7 @@ def choose_background(
     campaign: Optional[Dict[str, Any]] = None,
     formula: Optional[Dict[str, Any]] = None,
     persona: Optional[Dict[str, Any]] = None,
+    resolved_brief: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Pick a background with V3 matching + duplicate prevention.
 
@@ -324,11 +325,18 @@ def choose_background(
     elif not relaxed_rule:
         relaxed_rule = "avoid same campaign+formula+background combination too soon"
 
-    territory = creative_engine_v3.classify_emotional_territory(
-        campaign_name=(campaign or {}).get("name", ""),
-        pain_point=(campaign or {}).get("pain_point", ""),
-        goal=(campaign or {}).get("goal", ""),
-    )
+    if resolved_brief is not None:
+        territory = creative_engine_v3.classify_emotional_territory(
+            campaign_name=resolved_brief.pain_point_id,
+            pain_point=resolved_brief.life_moment_text or "",
+            goal=resolved_brief.objective,
+        )
+    else:
+        territory = creative_engine_v3.classify_emotional_territory(
+            campaign_name=(campaign or {}).get("name", ""),
+            pain_point=(campaign or {}).get("pain_point", ""),
+            goal=(campaign or {}).get("goal", ""),
+        )
     scored = []
     for bg in pool:
         meta = creative_engine_v3.classify_background(bg)
@@ -349,6 +357,7 @@ def choose_background(
         "match_score": score,
         "emotional_territory": territory,
         "_relaxed_rule": relaxed_rule,
+        "resolved_brief_applied": resolved_brief is not None,
     }
 
 

@@ -1,0 +1,24 @@
+{
+  "pain_points": {
+    "overwhelm": {
+      "aliases": ["overwhelmed", "feeling overwhelmed", "overwhelm"],
+      "safe_categories": ["Work & Ambition", "Family & Parenting"]
+    },
+    "anxiety": {
+      "aliases": ["anxious", "anxiety", "feeling anxious"],
+      "safe_categories": ["Sleep & Nighttime", "Health & Body", "Loneliness & Belonging", "Fear & Uncertainty"]
+    },
+    "worry": {
+      "aliases": ["worried", "worry", "feeling worried"],
+      "safe_categories": ["Money & Security", "Family & Parenting", "Fear & Uncertainty"]
+    },
+    "burnout": {
+      "aliases": ["burned out", "burnout", "burnt out"],
+      "safe_categories": ["Work & Ambition"]
+    },
+    "exhaustion": {
+      "aliases": ["exhausted", "exhaustion", "feeling exhausted"],
+      "safe_categories": ["Work & Ambition", "Sleep & Nighttime", "Family & Parenting"]
+    }
+  }
+}

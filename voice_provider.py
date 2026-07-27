@@ -26,6 +26,23 @@ TEMPORARY_TTS_ERROR_TOKENS = (
 )
 
 STYLE_PROFILES = {
+    "natural_conversational": {
+        "style": "Steady, natural, conversational delivery with restrained emotion.",
+        "pace": "Even, controlled pacing.",
+        "scene": (
+            "Speak in a steady, natural, conversational voice. "
+            "Use an even pace and restrained emotion. "
+            "Sound calm, clear, sincere, and grounded, as if speaking directly to one person. "
+            "Keep the delivery mostly level and controlled.\n\n"
+            "Do not sound theatrical, preachy, dramatic, excited, forceful, breathy, whispered, sleepy, or like a meditation narrator.\n"
+            "Do not shout, yell, strain, build into a sermon cadence, or add dramatic crescendos.\n"
+            "Use only slight emphasis on the most important words.\n"
+            "Let the meaning of the words carry the emotion rather than performing the emotion.\n\n"
+            "Read every sentence exactly once, in order. "
+            "Do not skip, summarize, paraphrase, duplicate, or add words."
+        ),
+        "generic_context": "A grounded everyday devotional reflection spoken with warmth and clarity.",
+    },
     "charismatic_prayer": {
         "style": "High energy, punchy consonants, elongated vowels on excitement words.",
         "pace": "Natural conversational pace.",
@@ -67,9 +84,12 @@ STYLE_PROFILES = {
     },
 }
 
+NATURAL_CONVERSATIONAL_STYLE_INSTRUCTION = STYLE_PROFILES["natural_conversational"]["scene"]
 PRAYER_STYLE_INSTRUCTION = STYLE_PROFILES["charismatic_prayer"]["scene"]
 DEVOTIONAL_STYLE_INSTRUCTION = STYLE_PROFILES["devotional_teacher"]["scene"]
 ENCOURAGEMENT_STYLE_INSTRUCTION = STYLE_PROFILES["hopeful_encouragement"]["scene"]
+
+VALID_STYLE_PROFILES = set(STYLE_PROFILES)
 
 
 def _get_gemini_client() -> genai.Client:
@@ -97,15 +117,22 @@ def select_style_instruction(copy: Dict[str, Any]) -> str:
 
 
 def select_style_profile(copy: Dict[str, Any]) -> str:
-    long_form_type = str(copy.get("long_form_type", "none")).strip().lower()
-    if long_form_type == "prayer":
-        return "charismatic_prayer"
-    if long_form_type == "devotional":
-        return "devotional_teacher"
-    return "hopeful_encouragement"
+    return select_style_profile_with_reason(copy)[0]
+
+
+def select_style_profile_with_reason(copy: Dict[str, Any]) -> tuple[str, str]:
+    override = str(copy.get("voice_style_profile", "")).strip().lower()
+    if override:
+        if override in VALID_STYLE_PROFILES:
+            return override, "explicit manual override"
+        print(f"[voice_provider] Invalid voice_style_profile override: {override}; falling back safely")
+
+    return "natural_conversational", "unified production narration profile"
 
 
 def _style_profile_from_instruction(style_instruction: str) -> str:
+    if style_instruction == NATURAL_CONVERSATIONAL_STYLE_INSTRUCTION:
+        return "natural_conversational"
     if style_instruction == PRAYER_STYLE_INSTRUCTION:
         return "charismatic_prayer"
     if style_instruction == DEVOTIONAL_STYLE_INSTRUCTION:
@@ -115,6 +142,10 @@ def _style_profile_from_instruction(style_instruction: str) -> str:
 
 def build_narration_segments(copy: Dict[str, Any]) -> List[str]:
     segments: List[str] = []
+    opening_hook = str(copy.get("opening_hook", "")).strip()
+    if opening_hook:
+        segments.append(opening_hook)
+
     bridge_line = str(copy.get("bridge_line", "")).strip()
     if bridge_line:
         segments.append(bridge_line)
@@ -239,7 +270,7 @@ def build_narration_segment_timeline(
 
     total_words = sum(max(1, len(segment.split())) for segment in segments)
     timeline: List[Dict[str, Any]] = []
-    current_time = hook_window
+    current_time = 0.0
     remaining_time = narration_duration
 
     for index, segment in enumerate(segments):
@@ -254,7 +285,14 @@ def build_narration_segment_timeline(
             segment_duration = min(segment_duration, max(min_segment_seconds, remaining_time - min_required_for_rest))
 
         segment_end = current_time + max(min_segment_seconds, segment_duration)
-        kind = "bridge_line" if index == 0 and str(copy.get("bridge_line", "")).strip() else "script_segment"
+        kind = "script_segment"
+        if index == 0 and str(copy.get("opening_hook", "")).strip():
+            kind = "opening_hook"
+        elif (
+            index == (1 if str(copy.get("opening_hook", "")).strip() else 0)
+            and str(copy.get("bridge_line", "")).strip()
+        ):
+            kind = "bridge_line"
         if segment == str(copy.get("closing_line", "")).strip() and str(copy.get("closing_line", "")).strip():
             kind = "closing_line"
         timeline.append(
@@ -265,11 +303,11 @@ def build_narration_segment_timeline(
                 "kind": kind,
             }
         )
-        remaining_time = max(0.0, hook_window + narration_duration - segment_end)
+        remaining_time = max(0.0, narration_duration - segment_end)
         current_time = segment_end
 
     if timeline:
-        timeline[-1]["end"] = hook_window + narration_duration
+        timeline[-1]["end"] = narration_duration
     return timeline
 
 
@@ -297,13 +335,18 @@ def _generate_with_gemini(
     copy: Optional[Dict[str, Any]] = None,
     model_name: Optional[str] = None,
 ) -> Path:
-    style_profile = select_style_profile(copy) if copy else _style_profile_from_instruction(style_instruction)
+    if copy:
+        style_profile, selection_reason = select_style_profile_with_reason(copy)
+    else:
+        style_profile = _style_profile_from_instruction(style_instruction)
+        selection_reason = "style instruction"
     if copy is not None:
         validate_narration_transcript(build_narration_segments(copy), text)
     prompt = build_tts_prompt(text, style_profile, copy)
     temperature = _resolve_voice_temperature()
     print(f"Gemini TTS voice: {voice_name}")
     print(f"Gemini TTS style profile: {style_profile}")
+    print(f"Style selection reason: {selection_reason}")
     print(f"Gemini TTS temperature: {temperature:g}")
     if config.PREVIEW_MODE:
         print(f"Final narration transcript character count: {len(text.strip())}")

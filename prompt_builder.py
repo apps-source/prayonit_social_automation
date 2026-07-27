@@ -400,12 +400,41 @@ def creative_brief_allows_soft_promotion(content_type: str) -> bool:
     return content_type in _SOFT_PROMOTION_CONTENT_TYPES
 
 
-def build_creative_brief_data(slot: str) -> Optional[Dict[str, Any]]:
+def build_creative_brief_data(
+    slot: str, resolved_brief: Optional[Any] = None
+) -> Optional[Dict[str, Any]]:
     """Assemble the structured Creative Brief data for today's rhythm.
 
     Returns None if the Weekly Rhythm config cannot be loaded, so callers
     can fail safe without breaking prompt generation.
     """
+    if resolved_brief is not None:
+        return {
+            "weekly_theme": resolved_brief.weekly_theme,
+            "content_type": resolved_brief.content_type,
+            "objective": resolved_brief.objective,
+            "tone": resolved_brief.tone,
+            "emotional_goal": resolved_brief.emotional_goal,
+            "video_template": resolved_brief.video_template,
+            "target_duration": resolved_brief.duration_seconds,
+            "marketing_enabled": resolved_brief.marketing_enabled,
+            "engagement_prompt_enabled": bool(resolved_brief.engagement_prompt),
+            "engagement_prompt_type": resolved_brief.engagement_prompt_type,
+            "format_guidance": build_format_specific_guidance(resolved_brief.content_type),
+            "expected_long_form_type": resolved_brief.long_form_type,
+            "life_moment": {
+                "category": resolved_brief.life_moment_category,
+                "moment": resolved_brief.life_moment_text,
+                "emotions": [resolved_brief.normalized_emotion_id],
+            },
+            "hook": {"name": resolved_brief.hook_style_label},
+            "engagement_prompt": (
+                {"prompt": resolved_brief.engagement_prompt}
+                if resolved_brief.engagement_prompt
+                else None
+            ),
+            "soft_promotion": None,
+        }
     try:
         todays_content = content_engine.get_todays_content(slot=slot)
     except Exception as exc:  # pragma: no cover - defensive fallback only
@@ -457,7 +486,7 @@ def build_creative_brief_data(slot: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def build_creative_brief_preamble(slot: str) -> str:
+def build_creative_brief_preamble(slot: str, resolved_brief: Optional[Any] = None) -> str:
     """Build the structured "Creative Brief" text block and log the
     resolved selections for verification.
 
@@ -465,7 +494,7 @@ def build_creative_brief_preamble(slot: str) -> str:
     prompt content; it is an additional block prepended before the
     existing Gemini prompt.
     """
-    brief = build_creative_brief_data(slot)
+    brief = build_creative_brief_data(slot, resolved_brief=resolved_brief)
     if brief is None:
         return ""
 
@@ -554,6 +583,7 @@ def build_prompt(
     selection: Dict[str, Any],
     slot: str,
     tracked_url: str,
+    resolved_brief: Optional[Any] = None,
 ) -> str:
     """Build the full Gemini prompt.
 
@@ -576,7 +606,7 @@ def build_prompt(
 
     brand_preamble = build_brand_brain_preamble(config.BRAND_RULES)
     weekly_rhythm_preamble = build_weekly_rhythm_preamble(slot)
-    creative_brief_preamble = build_creative_brief_preamble(slot)
+    creative_brief_preamble = build_creative_brief_preamble(slot, resolved_brief=resolved_brief)
 
     # ---- Emotional flow: Life Moment -> Recognition Hook -> Comfort ->
     # Hope -> Invitation -> Brand Rules -> App Features -> Constraints ----
@@ -1155,9 +1185,14 @@ def generate_ad_copy(
     selection: Dict[str, Any],
     slot: str,
     tracked_url: str,
+    resolved_brief: Optional[Any] = None,
 ) -> Dict[str, Any]:
     prompt = build_prompt(
-        post_type=post_type, selection=selection, slot=slot, tracked_url=tracked_url
+        post_type=post_type,
+        selection=selection,
+        slot=slot,
+        tracked_url=tracked_url,
+        resolved_brief=resolved_brief,
     )
 
     # TEMPORARY DEBUG LOGGING: verify the Creative Brief is actually part
@@ -1204,7 +1239,9 @@ def generate_ad_copy(
     return apply_brand_enforcement(ad_copy, config.BRAND_RULES)
 
 
-def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str, Any]:
+def generate_local_ad_copy(
+    *, selection: Dict[str, Any], slot: str, resolved_brief: Optional[Any] = None
+) -> Dict[str, Any]:
     """Deterministic local copy generator used for TEST_MODE preview runs."""
     campaign = selection["campaign"]
     territory = selection.get("emotional_territory") or creative_engine_v3.classify_emotional_territory(
@@ -1225,6 +1262,8 @@ def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str,
         "gratitude": "Want to Thank God Today?",
     }
     pain_headline = headline_map.get(territory, "Need Prayer Support Today?")
+    if resolved_brief is not None and resolved_brief.pain_point_label:
+        pain_headline = "Feeling {0}?".format(resolved_brief.pain_point_label.rstrip("?"))
     spiritual_action = selection.get("spiritual_action", "Give your worries to God.")
     ad_copy = {
         "brand_header": "PRAYONIT",
@@ -1245,6 +1284,14 @@ def generate_local_ad_copy(*, selection: Dict[str, Any], slot: str) -> Dict[str,
     }
     todays_content = content_engine.get_todays_content(slot=slot)
     presentation = content_engine.get_presentation_config(todays_content)
+    if resolved_brief is not None:
+        todays_content = {"content_type": resolved_brief.content_type}
+        presentation = {
+            **presentation,
+            "video_template": resolved_brief.video_template,
+            "duration_seconds": resolved_brief.duration_seconds,
+            "engagement_prompt_enabled": bool(resolved_brief.engagement_prompt),
+        }
     long_form = build_long_form_defaults(
         content_type=todays_content.get("content_type", ""),
         video_template=presentation["video_template"],

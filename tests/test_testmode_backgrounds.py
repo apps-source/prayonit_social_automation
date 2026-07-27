@@ -122,6 +122,9 @@ def test_production_background_source_unchanged(isolated_database, tmp_path, mon
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
     monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
     monkeypatch.setattr(prayonit_social.config, "validate_destination_config", lambda: None)
+    monkeypatch.setattr(prayonit_social.config, "SOCIAL_OUTPUT_MODE", "full")
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_PUBLISH_ENABLED", False)
 
     called = {"supabase": 0, "list": 0}
 

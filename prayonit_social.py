@@ -19,6 +19,9 @@ import argparse
 import json
 import os
 import random
+import re
+import shutil
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -36,6 +39,7 @@ import config
 import history_store
 import image_renderer
 import prompt_builder
+import resolved_content_brief
 import tracking
 import voice_provider
 from engines import content_engine
@@ -144,6 +148,441 @@ def discover_local_backgrounds() -> Dict[str, Any]:
     }
 
 
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
+    return slug or "topic"
+
+
+def _resolve_creator_search_topic(
+    ad_copy: Dict[str, Any],
+    selection: Dict[str, Any],
+    brief: Optional[resolved_content_brief.ResolvedContentBrief] = None,
+) -> str:
+    if brief is not None and brief.creator_search_topic:
+        return brief.creator_search_topic
+    return (
+        str(ad_copy.get("creator_search_topic", "")).strip()
+        or str(selection.get("thread_topic", "")).strip()
+        or _slugify(str(ad_copy.get("pain_headline", "")).strip()).replace("-", " ")
+    )
+
+
+def _load_tiktok_handoff_manifest(manifest_path: Path) -> Dict[str, Any]:
+    if not manifest_path.exists():
+        return {"imports": {}}
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"imports": {}}
+    if not isinstance(data, dict):
+        return {"imports": {}}
+    data.setdefault("imports", {})
+    return data
+
+
+def _save_tiktok_handoff_manifest(manifest_path: Path, manifest: Dict[str, Any]) -> None:
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _split_tiktok_caption(caption: str) -> Dict[str, str]:
+    tokens = str(caption or "").split()
+    hashtag_tokens = [token for token in tokens if token.startswith("#")]
+    hashtag_text = " ".join(hashtag_tokens).strip()
+    body_lines = []
+    for line in str(caption or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if all(token.startswith("#") for token in stripped.split()):
+            continue
+        body_lines.append(stripped)
+    body_text = "\n".join(body_lines).strip()
+    full_caption = body_text
+    if hashtag_text:
+        full_caption = f"{body_text}\n\n{hashtag_text}" if body_text else hashtag_text
+    return {
+        "body": body_text,
+        "hashtags": hashtag_text,
+        "full_caption": full_caption,
+    }
+
+
+def _build_tiktok_handoff_note(
+    *,
+    title: str,
+    creator_search_topic: str,
+    full_caption: str,
+    hashtags: str,
+    opening_hook: str,
+    genre_label: str,
+    slot: str,
+    content_type: str,
+    video_filename: str,
+) -> str:
+    return (
+        f"Creator Search Insights Topic:\n{creator_search_topic or 'Not selected'}\n\n"
+        f"Caption:\n{full_caption}\n\n"
+        f"Hashtags:\n{hashtags}\n\n"
+        f"Opening Hook:\n{opening_hook}\n\n"
+        f"Genre Label:\n{genre_label}\n\n"
+        f"Slot:\n{slot}\n\n"
+        f"Content Type:\n{content_type}\n\n"
+        f"Video Filename:\n{video_filename}\n\n"
+        f"Photos Album:\n{config.TIKTOK_PHOTOS_ALBUM_NAME}\n\n"
+        "Status:\nReady for manual TikTok upload\n"
+    )
+
+
+def _applescript_escape(value: str) -> str:
+    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _run_osascript(script: str, *, app_label: str, phase: str) -> subprocess.CompletedProcess:
+    result = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"{app_label} osascript return code: {result.returncode}")
+        print(f"{app_label} osascript stdout: {result.stdout.strip()}")
+        print(f"{app_label} osascript stderr: {result.stderr.strip()}")
+        print(f"{app_label} failure phase: {phase}")
+        detail = result.stderr.strip() or result.stdout.strip() or f"osascript exited with {result.returncode}"
+        raise RuntimeError(f"{app_label} failure phase {phase}: {detail}")
+    return result
+
+
+def _build_photos_direct_import_script(video_path: Path, album_name: str) -> str:
+    escaped_video_path = _applescript_escape(str(video_path))
+    escaped_album_name = _applescript_escape(album_name)
+    return f"""
+set targetFile to POSIX file "{escaped_video_path}"
+set albumName to "{escaped_album_name}"
+tell application "Photos"
+    activate
+    set targetAlbum to missing value
+    repeat with existingAlbum in albums
+        if name of existingAlbum is albumName then
+            set targetAlbum to existingAlbum
+            exit repeat
+        end if
+    end repeat
+    if targetAlbum is missing value then
+        set targetAlbum to make new album named albumName
+    end if
+    import {{targetFile}} into targetAlbum skip check duplicates yes
+end tell
+"""
+
+
+def _build_photos_returned_items_script(video_path: Path, album_name: str) -> str:
+    escaped_album_name = _applescript_escape(album_name)
+    return f"""
+set targetFile to POSIX file "{_applescript_escape(str(video_path))}"
+set albumName to "{escaped_album_name}"
+tell application "Photos"
+    activate
+    set targetAlbum to missing value
+    repeat with existingAlbum in albums
+        if name of existingAlbum is albumName then
+            set targetAlbum to existingAlbum
+            exit repeat
+        end if
+    end repeat
+    if targetAlbum is missing value then
+        set targetAlbum to make new album named albumName
+    end if
+    set importedItems to import {{targetFile}} skip check duplicates yes
+    if importedItems is missing value then error "Photos import returned no media items."
+    add importedItems to targetAlbum
+end tell
+"""
+
+
+def _import_video_to_apple_photos(video_path: Path, album_name: str) -> Dict[str, Any]:
+    direct_script = _build_photos_direct_import_script(video_path, album_name)
+    try:
+        _run_osascript(
+            direct_script,
+            app_label="Apple Photos",
+            phase="import_into_album",
+        )
+        return {
+            "attempted": True,
+            "succeeded": True,
+            "album_added": True,
+            "fallback_used": None,
+        }
+    except Exception as exc:  # noqa: BLE001
+        print(f"Apple Photos direct album import failed; trying returned-items fallback: {exc}")
+
+    fallback_script = _build_photos_returned_items_script(video_path, album_name)
+    _run_osascript(
+        fallback_script,
+        app_label="Apple Photos",
+        phase="import_returned_items_then_add_to_album",
+    )
+    return {
+        "attempted": True,
+        "succeeded": True,
+        "album_added": True,
+        "fallback_used": "returned_items",
+    }
+
+
+def _create_apple_note(*, folder_name: str, title: str, body: str) -> Dict[str, Any]:
+    html_body = _applescript_escape(body.replace("\n", "<br>"))
+    script = f'''
+tell application "Notes"
+    activate
+    set targetFolder to missing value
+    repeat with existingFolder in folders
+        if name of existingFolder is "{_applescript_escape(folder_name)}" then
+            set targetFolder to existingFolder
+            exit repeat
+        end if
+    end repeat
+    if targetFolder is missing value then
+        set targetFolder to make new folder with properties {{name:"{_applescript_escape(folder_name)}"}}
+    end if
+    make new note at targetFolder with properties {{name:"{_applescript_escape(title)}", body:"{html_body}"}}
+end tell
+'''
+    _run_osascript(
+        script,
+        app_label="Apple Notes",
+        phase="create_note",
+    )
+    return {"attempted": True, "succeeded": True}
+
+
+def _find_tiktok_handoff_entry(
+    manifest: Dict[str, Any],
+    *,
+    backup_path: Path,
+    notes_path: Optional[Path] = None,
+) -> tuple[Optional[str], Dict[str, Any]]:
+    backup_resolved = str(backup_path.resolve())
+    notes_resolved = str(notes_path.resolve()) if notes_path else None
+    for source_key, entry in manifest.get("imports", {}).items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("backup_path") == backup_resolved:
+            return source_key, entry
+        if notes_resolved and entry.get("notes_path") == notes_resolved:
+            return source_key, entry
+    return None, {}
+
+
+def _retry_tiktok_handoff_package(*, video_path: Path, notes_path: Path) -> Dict[str, Any]:
+    handoff_dir = config.OUTPUT_TIKTOK_HANDOFF_DIR
+    manifest_path = handoff_dir / "photos_import_manifest.json"
+    manifest = _load_tiktok_handoff_manifest(manifest_path)
+    source_key, existing_entry = _find_tiktok_handoff_entry(
+        manifest,
+        backup_path=video_path,
+        notes_path=notes_path,
+    )
+    if source_key is None:
+        source_key = str(video_path.resolve())
+
+    photos_status = {
+        "attempted": False,
+        "succeeded": bool(existing_entry.get("succeeded")),
+        "already_imported": bool(existing_entry.get("succeeded")),
+        "album_added": bool(existing_entry.get("succeeded")),
+        "recovery_guidance": "",
+        "fallback_used": existing_entry.get("photos_fallback_used"),
+    }
+    note_status = {
+        "attempted": False,
+        "succeeded": bool(existing_entry.get("apple_note_created")),
+        "already_created": bool(existing_entry.get("apple_note_created")),
+        "recovery_guidance": "",
+    }
+
+    if config.TIKTOK_IMPORT_TO_PHOTOS and not photos_status["already_imported"]:
+        photos_status["attempted"] = True
+        try:
+            photos_status.update(_import_video_to_apple_photos(video_path, config.TIKTOK_PHOTOS_ALBUM_NAME))
+        except Exception as exc:  # noqa: BLE001
+            photos_status["succeeded"] = False
+            photos_status["album_added"] = False
+            photos_status["recovery_guidance"] = (
+                "Open Photos on this Mac, import the backup MP4 manually, "
+                "and add it to the Prayonit TikTok Ready album."
+            )
+            print(f"TikTok handoff retry; Apple Photos import failed: {exc}")
+            print(photos_status["recovery_guidance"])
+
+    note_title = str(existing_entry.get("apple_note_title", "")).strip() or f"Prayonit TikTok — {video_path.stem}"
+    if config.TIKTOK_CREATE_APPLE_NOTE and not note_status["already_created"]:
+        note_status["attempted"] = True
+        try:
+            _create_apple_note(
+                folder_name=config.TIKTOK_NOTES_FOLDER_NAME,
+                title=note_title,
+                body=notes_path.read_text(encoding="utf-8"),
+            )
+            note_status["succeeded"] = True
+        except Exception as exc:  # noqa: BLE001
+            note_status["succeeded"] = False
+            note_status["recovery_guidance"] = (
+                "Open Apple Notes on this Mac and create the handoff note manually "
+                f"in the {config.TIKTOK_NOTES_FOLDER_NAME} folder."
+            )
+            print(f"TikTok handoff retry; Apple Note creation failed: {exc}")
+            print(note_status["recovery_guidance"])
+
+    manifest["imports"][source_key] = {
+        **existing_entry,
+        "backup_path": str(video_path.resolve()),
+        "notes_path": str(notes_path.resolve()),
+        "succeeded": photos_status["succeeded"],
+        "already_imported": photos_status["already_imported"],
+        "photos_fallback_used": photos_status.get("fallback_used"),
+        "apple_note_created": note_status["succeeded"],
+        "apple_note_title": note_title,
+    }
+    _save_tiktok_handoff_manifest(manifest_path, manifest)
+    return {
+        "photos_status": photos_status,
+        "note_status": note_status,
+        "manifest_path": manifest_path,
+    }
+
+
+def _create_tiktok_manual_handoff(
+    *,
+    video_local_path: Path,
+    ad_copy: Dict[str, Any],
+    selection: Dict[str, Any],
+    presentation_config: Dict[str, Any],
+    due_at_iso: str,
+    slot: str,
+    run_row_id: int,
+) -> Dict[str, Any]:
+    import long_form_renderer
+
+    handoff_dir = config.OUTPUT_TIKTOK_HANDOFF_DIR
+    handoff_dir.mkdir(parents=True, exist_ok=True)
+    creator_search_topic = _resolve_creator_search_topic(ad_copy, selection)
+    scheduled_date = due_at_iso[:10]
+    content_slug = str(presentation_config.get("video_template", "video")).replace("_", "-")
+    topic_slug = _slugify(creator_search_topic)
+    base_filename = f"{scheduled_date}_{slot}_{content_slug}_{topic_slug}"
+    backup_path = handoff_dir / f"{base_filename}.mp4"
+    notes_path = handoff_dir / f"{base_filename}.txt"
+    manifest_path = handoff_dir / "photos_import_manifest.json"
+    shutil.copy2(video_local_path, backup_path)
+
+    manifest = _load_tiktok_handoff_manifest(manifest_path)
+    source_key = str(video_local_path.resolve())
+    existing_entry = manifest["imports"].get(source_key, {})
+    already_imported = bool(existing_entry.get("succeeded"))
+    photos_status = {
+        "attempted": False,
+        "succeeded": False,
+        "already_imported": already_imported,
+        "album_added": False,
+        "recovery_guidance": "",
+    }
+    note_status = {
+        "attempted": False,
+        "succeeded": bool(existing_entry.get("apple_note_created")),
+        "already_created": bool(existing_entry.get("apple_note_created")),
+        "recovery_guidance": "",
+    }
+
+    if config.TIKTOK_IMPORT_TO_PHOTOS and not already_imported:
+        photos_status["attempted"] = True
+        try:
+            import_result = _import_video_to_apple_photos(backup_path, config.TIKTOK_PHOTOS_ALBUM_NAME)
+            photos_status.update(import_result)
+        except Exception as exc:  # noqa: BLE001
+            photos_status["recovery_guidance"] = (
+                "Open Photos on this Mac, import the backup MP4 manually, "
+                "and add it to the Prayonit TikTok Ready album."
+            )
+            print(f"TikTok handoff created locally; Apple Photos import failed: {exc}")
+            print(photos_status["recovery_guidance"])
+    elif already_imported:
+        photos_status["attempted"] = False
+        photos_status["succeeded"] = True
+        photos_status["album_added"] = True
+
+    genre_label = long_form_renderer._content_label(presentation_config)
+    caption_parts = _split_tiktok_caption(ad_copy.get("tiktok_caption") or ad_copy.get("instagram_caption") or "")
+    note_title = "Prayonit TikTok — {0} {1}".format(
+        scheduled_date,
+        slot.capitalize(),
+    )
+    note_body = _build_tiktok_handoff_note(
+        title=note_title,
+        creator_search_topic=creator_search_topic,
+        full_caption=caption_parts["full_caption"],
+        hashtags=caption_parts["hashtags"],
+        opening_hook=str(ad_copy.get("opening_hook", "")).strip(),
+        genre_label=genre_label,
+        slot=slot,
+        content_type=content_slug,
+        video_filename=backup_path.name,
+    )
+
+    if config.TIKTOK_CREATE_APPLE_NOTE and not note_status["already_created"]:
+        note_status["attempted"] = True
+        try:
+            _create_apple_note(
+                folder_name=config.TIKTOK_NOTES_FOLDER_NAME,
+                title=note_title,
+                body=note_body,
+            )
+            note_status["succeeded"] = True
+        except Exception as exc:  # noqa: BLE001
+            note_status["recovery_guidance"] = (
+                "Open Apple Notes on this Mac and create the handoff note manually "
+                f"in the {config.TIKTOK_NOTES_FOLDER_NAME} folder."
+            )
+            print(f"TikTok handoff local text created; Apple Note creation failed: {exc}")
+            print(note_status["recovery_guidance"])
+
+    manifest["imports"][source_key] = {
+        "backup_path": str(backup_path.resolve()),
+        "notes_path": str(notes_path.resolve()),
+        "succeeded": photos_status["succeeded"],
+        "already_imported": photos_status["already_imported"],
+        "photos_fallback_used": photos_status.get("fallback_used"),
+        "creator_search_topic": creator_search_topic,
+        "apple_note_created": note_status["succeeded"],
+        "apple_note_title": note_title,
+    }
+    _save_tiktok_handoff_manifest(manifest_path, manifest)
+
+    notes = [
+        f"Creator Search Insights target phrase: {creator_search_topic}",
+        f"TikTok caption: {caption_parts['full_caption']}",
+        f"hashtags: {caption_parts['hashtags']}",
+        f"scheduled date and slot: {scheduled_date} {slot}",
+        f"content type: {content_slug}",
+        f"opening hook: {str(ad_copy.get('opening_hook', '')).strip()}",
+        f"genre label: {genre_label}",
+        f"source production MP4 path: {video_local_path.resolve()}",
+        f"Photos import status: {'succeeded' if photos_status['succeeded'] else 'failed' if photos_status['attempted'] else 'not_attempted'}",
+        f"Apple Note status: {'succeeded' if note_status['succeeded'] else 'failed' if note_status['attempted'] else 'not_attempted'}",
+    ]
+    notes_path.write_text("\n".join(notes) + "\n", encoding="utf-8")
+    return {
+        "creator_search_topic": creator_search_topic,
+        "backup_path": backup_path,
+        "notes_path": notes_path,
+        "photos_status": photos_status,
+        "note_status": note_status,
+        "note_title": note_title,
+    }
+
+
 def _log_preview_narration_debug(ad_copy: Dict[str, Any], narration_text: str) -> None:
     if not config.PREVIEW_MODE:
         return
@@ -191,6 +630,13 @@ def build_arg_parser():
 
     history_parser = subparsers.add_parser("history", help="Print recent campaign run history.")
     history_parser.add_argument("--days", type=int, default=30)
+
+    retry_tiktok_parser = subparsers.add_parser(
+        "retry-tiktok-handoff",
+        help="Retry Apple Photos and Apple Notes handoff for an existing local TikTok package.",
+    )
+    retry_tiktok_parser.add_argument("--video", required=True)
+    retry_tiktok_parser.add_argument("--notes", required=True)
 
     subparsers.add_parser("campaigns", help="List all available campaigns.")
     subparsers.add_parser("database-init", help="Initialize the local SQLite database.")
@@ -267,18 +713,66 @@ def cmd_history(days):
         )
 
 
+def cmd_retry_tiktok_handoff(video: str, notes: str) -> int:
+    video_path = Path(video)
+    notes_path = Path(notes)
+    if not video_path.exists():
+        raise RuntimeError(f"TikTok handoff video does not exist: {video_path}")
+    if not notes_path.exists():
+        raise RuntimeError(f"TikTok handoff notes file does not exist: {notes_path}")
+
+    result = _retry_tiktok_handoff_package(video_path=video_path, notes_path=notes_path)
+    print(f"TikTok handoff retry video: {video_path.resolve()}")
+    print(f"TikTok handoff retry notes: {notes_path.resolve()}")
+    print(f"Apple Photos import attempted: {result['photos_status']['attempted']}")
+    print(f"Apple Photos import succeeded: {result['photos_status']['succeeded']}")
+    print(f"Apple Note attempted: {result['note_status']['attempted']}")
+    print(f"Apple Note succeeded: {result['note_status']['succeeded']}")
+    return 0
+
+
 def cmd_run(slot) -> int:
     config.require_env(config.TEST_MODE, preview_mode=config.PREVIEW_MODE)
     config.validate_destination_config()
     history_store.initialize_database()
+    output_mode = config.SOCIAL_OUTPUT_MODE if not (config.TEST_MODE or config.PREVIEW_MODE) else "full"
+    reels_only_output = output_mode == "reels_only"
 
     run_id = str(uuid.uuid4())
+    due_at = next_slot_datetime_utc(slot)
+    due_at_iso = to_iso8601_utc(due_at)
     print("Run ID: {0}".format(run_id))
     print("TEST_MODE: {0}".format(config.TEST_MODE))
     print("PREVIEW_MODE: {0}".format(config.PREVIEW_MODE))
+    print("SOCIAL_OUTPUT_MODE: {0}".format(output_mode))
 
     selection = campaign_engine.choose_selection(slot)
-    campaign = selection["campaign"]
+    campaign_candidates = campaign_engine.load_campaigns()
+    brief = resolved_content_brief.resolve_content_brief(
+        run_id=run_id,
+        slot=slot,
+        post_date=due_at.date().isoformat(),
+        platform_mode=output_mode,
+        candidate_campaign=selection["campaign"],
+        campaigns=campaign_candidates,
+    )
+    brief_report = resolved_content_brief.validate_resolved_content_brief(brief)
+    resolved_content_brief.log_resolved_content_brief(brief)
+    for item in brief_report:
+        print("Resolved brief validation [{0}]: {1}".format(item["status"], item["message"]))
+    if resolved_content_brief.has_critical_failure(brief_report):
+        raise RuntimeError("Resolved Content Brief has a critical identity mismatch.")
+
+    campaign = next(
+        (candidate for candidate in campaign_candidates if candidate.get("_key") == brief.campaign_id),
+        None,
+    )
+    if campaign is None:
+        campaign = {"_key": "", "name": "", "pain_point": "", "goal": ""}
+    selection["campaign"] = campaign
+    selection["hook"] = brief.hook_style_label or ""
+    selection["cta"] = brief.cta_text
+    selection["thread_topic"] = brief.creator_search_topic or ""
     formula = selection["formula"]
     persona = selection["persona"]
 
@@ -288,13 +782,26 @@ def cmd_run(slot) -> int:
     supabase = get_supabase_client()
     backgrounds = list_backgrounds(supabase)
 
-    background_choice = campaign_engine.choose_background(
-        backgrounds,
-        slot=slot,
-        campaign=campaign,
-        formula=formula,
-        persona=persona,
-    )
+    try:
+        background_choice = campaign_engine.choose_background(
+            backgrounds,
+            slot=slot,
+            campaign=campaign,
+            formula=formula,
+            persona=persona,
+            resolved_brief=brief,
+        )
+    except TypeError as exc:
+        if "resolved_brief" not in str(exc):
+            raise
+        # Existing extension points may still provide the legacy selector.
+        background_choice = campaign_engine.choose_background(
+            backgrounds,
+            slot=slot,
+            campaign=campaign,
+            formula=formula,
+            persona=persona,
+        )
     chosen_background = background_choice["path"]
     if background_choice.get("_relaxed_rule"):
         print("NOTE: relaxed rule -> {0}".format(background_choice["_relaxed_rule"]))
@@ -302,13 +809,23 @@ def cmd_run(slot) -> int:
         print("Background metadata: {0}".format(json.dumps(background_choice["metadata"])))
     if background_choice.get("match_score") is not None:
         print("Background match score: {0}".format(background_choice["match_score"]))
+    asset_report = resolved_content_brief.validate_asset_metadata(brief, background_choice.get("metadata") or {})
+    for item in asset_report:
+        print("Resolved asset validation [{0}]: {1}".format(item["status"], item["message"]))
+    if (
+        background_choice.get("resolved_brief_applied")
+        and resolved_content_brief.has_critical_failure(asset_report)
+    ):
+        raise RuntimeError("Resolved Content Brief asset requirements conflict with the selected background.")
+    if not background_choice.get("resolved_brief_applied") and resolved_content_brief.has_critical_failure(asset_report):
+        print("Resolved asset validation [warning]: legacy background selector did not apply the canonical brief.")
 
     # Creative Engine v2: pick an approved spiritual-action sentence from
     # brand/theology_actions.json, matched to this campaign and slot.
     selection["spiritual_action"] = campaign_engine.pick_spiritual_action(campaign, slot)
     print("Selected spiritual action: {0}".format(selection["spiritual_action"]))
 
-    print("Selected campaign: {0}".format(campaign["name"]))
+    print("Selected campaign: {0}".format(campaign.get("name") or "none"))
     print("Selected formula: {0}".format(formula["name"]))
     print("Selected persona: {0}".format(persona["name"] if persona else "none"))
     if selection.get("seasonal_context"):
@@ -317,26 +834,26 @@ def cmd_run(slot) -> int:
         print("NOTE: relaxed rule -> {0}".format(rule))
     print("Selected hook: {0}".format(selection["hook"]))
     print("Selected CTA: {0}".format(selection["cta"]))
-    print("Selected thread topic: {0} (reserved for future use, not posted)".format(selection["thread_topic"]))
+    print("Selected Creator Search topic: {0}".format(brief.creator_search_topic or "none"))
     print("Selected background: {0}".format(chosen_background))
     print("Selected Supabase background filename: {0}".format(Path(chosen_background).name))
 
-    due_at = next_slot_datetime_utc(slot)
-    due_at_iso = to_iso8601_utc(due_at)
     print("Selected slot: {0} -> dueAt (UTC): {1}".format(slot, due_at_iso))
 
     run_row_id = history_store.create_run_record(
         run_id=run_id,
         slot=slot,
-        campaign_name=campaign["name"],
+        campaign_name=brief.campaign_name or "",
         formula_name=formula["name"],
         persona_name=persona["name"] if persona else None,
         seasonal_context=selection.get("seasonal_context"),
-        selected_hook=selection["hook"],
+        selected_hook=brief.hook_style_label,
         selected_body_angle=selection["body_angle"],
-        selected_cta=selection["cta"],
-        selected_thread_topic=selection["thread_topic"],
+        selected_cta=brief.cta_text,
+        selected_thread_topic=None,
+        selected_creator_search_topic=_resolve_creator_search_topic({}, selection, brief),
         background_object_path=chosen_background,
+        resolved_brief=brief.to_history_dict(),
         status="dry_run" if (config.TEST_MODE or config.PREVIEW_MODE) else "in_progress",
     )
 
@@ -367,7 +884,7 @@ def cmd_run(slot) -> int:
         for platform in ("facebook", "instagram"):
             tracked_urls[platform] = tracking.create_tracked_link(
                 run_id=run_id,
-                campaign_name=campaign["name"],
+                campaign_name=brief.campaign_name or "",
                 formula_name=formula["name"],
                 persona_name=persona["name"] if persona else None,
                 platform=platform,
@@ -380,17 +897,29 @@ def cmd_run(slot) -> int:
     post_type_hint = "download-focused {0} ad".format(slot)
     try:
         if config.TEST_MODE:
-            ad_copy = prompt_builder.generate_local_ad_copy(selection=selection, slot=slot)
+            try:
+                ad_copy = prompt_builder.generate_local_ad_copy(
+                    selection=selection, slot=slot, resolved_brief=brief
+                )
+            except TypeError as exc:
+                if "resolved_brief" not in str(exc):
+                    raise
+                ad_copy = prompt_builder.generate_local_ad_copy(selection=selection, slot=slot)
         else:
             ad_copy = prompt_builder.generate_ad_copy(
                 post_type=post_type_hint,
                 selection=selection,
                 slot=slot,
                 tracked_url=tracked_urls["facebook"],
+                resolved_brief=brief,
             )
     except Exception as exc:
         history_store.update_run_record(run_row_id, status="failed", error_message=str(exc))
         raise
+
+    # The handoff note and future analytics consume this canonical topic;
+    # generated copy must not replace it with a campaign-derived topic.
+    ad_copy["creator_search_topic"] = brief.creator_search_topic
 
     # Production-only: one deterministic recovery attempt before final QA if
     # headline quality fails. No additional Gemini call is made.
@@ -439,80 +968,87 @@ def cmd_run(slot) -> int:
     print("Facebook caption: {0}".format(platform_captions["facebook"]))
     print("Instagram caption: {0}".format(platform_captions["instagram"]))
 
-    background_image = image_renderer.load_background(chosen_background)
-    feed_image = image_renderer.compose_ad(background_image, ad_copy)
-    story_image = image_renderer.compose_story_ad(background_image, ad_copy)
-
-    has_badges = config.APP_STORE_BADGE_PATH.exists() and config.GOOGLE_PLAY_BADGE_PATH.exists()
-    # Render images (these functions produce the final composed images and
-    # attach contrast and overlay debug info into image.info)
-    background_for_feed = image_renderer.crop_to_canvas(background_image)
-    feed_image = image_renderer.compose_ad(background_for_feed, ad_copy)
-    background_for_story = image_renderer.crop_to_canvas(background_image, config.STORY_CANVAS_SIZE)
-    story_image = image_renderer.compose_story_ad(background_for_story, ad_copy)
-
-    # Prefer element-level contrast metrics computed during rendering (final treated image).
-    # Fallback order: element_contrast_metrics -> effective_contrast_metrics -> contrast_metrics -> recompute.
-    def _select_contrast_metrics(img: Image.Image, key: str, canvas_kind: str) -> Dict[str, Any]:
-        # element_contrast_metrics stores a mapping like {"feed": {...}} or {"story": {...}}
-        elem = img.info.get("element_contrast_metrics")
-        if elem and isinstance(elem, dict) and key in elem:
-            return elem[key]
-        eff = img.info.get("effective_contrast_metrics")
-        if eff and isinstance(eff, dict) and eff.get("canvas_kind") == canvas_kind:
-            return eff
-        cm = img.info.get("contrast_metrics")
-        if cm and isinstance(cm, dict) and cm.get("canvas_kind") == canvas_kind:
-            return cm
-        # Last resort: recompute from the treated base image
-        return image_renderer.compute_local_contrast_metrics(image_renderer.add_dark_gradient(img.convert("RGB")), canvas_kind)
-
-    feed_contrast_metrics = _select_contrast_metrics(feed_image, "feed", "feed")
-    story_contrast_metrics = _select_contrast_metrics(story_image, "story", "story")
-
-    # Combined overall pass should reflect final treated result (element-level metrics if present)
-    combined_contrast = {
-        "overall_pass": bool(feed_contrast_metrics.get("overall_pass") and story_contrast_metrics.get("overall_pass")),
-        "feed": feed_contrast_metrics,
-        "story": story_contrast_metrics,
-    }
-    # Enforce locked benefit text *before* QA so QA sees final enforced values
+    # Enforce locked benefit text before any optional static rendering/QA so
+    # all downstream paths see the final approved values.
     ad_copy["app_benefit"] = image_renderer.EXACT_BENEFIT_TEXT if hasattr(image_renderer, "EXACT_BENEFIT_TEXT") else "Get a guided, personalized prayer based on your mood right now."
     ad_copy["story_app_benefit"] = ad_copy["app_benefit"]
-
-    qa_report = creative_engine_v3.build_prepublish_qa_report(
-        ad_copy=ad_copy,
-        slot=slot,
-        campaign_name=campaign["name"],
-        background_path=chosen_background,
-        background_meta=background_choice.get("metadata") or creative_engine_v3.classify_background(chosen_background),
-        territory=territory,
-        recent_headlines=recent_headlines,
-        has_badges=has_badges,
-        contrast_metrics=combined_contrast,
-        captions=platform_captions,
-    )
-    print("QA report:\n{0}".format(json.dumps(qa_report, indent=2)))
-
+    qa_report = None
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    feed_local_path = config.OUTPUT_IMAGES_FEED_DIR / "prayonit-feed-{0}.jpg".format(timestamp)
-    story_local_path = config.OUTPUT_IMAGES_STORY_DIR / "prayonit-story-{0}.jpg".format(timestamp)
-    feed_image.save(feed_local_path, quality=95)
-    story_image.save(story_local_path, quality=95)
-    print("Saved feed preview: {0}".format(feed_local_path.resolve()))
-    print("Saved story preview: {0}".format(story_local_path.resolve()))
+    feed_local_path = None
+    story_local_path = None
+    if not reels_only_output:
+        background_image = image_renderer.load_background(chosen_background)
+        feed_image = image_renderer.compose_ad(background_image, ad_copy)
+        story_image = image_renderer.compose_story_ad(background_image, ad_copy)
+
+        has_badges = config.APP_STORE_BADGE_PATH.exists() and config.GOOGLE_PLAY_BADGE_PATH.exists()
+        # Render images (these functions produce the final composed images and
+        # attach contrast and overlay debug info into image.info)
+        background_for_feed = image_renderer.crop_to_canvas(background_image)
+        feed_image = image_renderer.compose_ad(background_for_feed, ad_copy)
+        background_for_story = image_renderer.crop_to_canvas(background_image, config.STORY_CANVAS_SIZE)
+        story_image = image_renderer.compose_story_ad(background_for_story, ad_copy)
+
+        # Prefer element-level contrast metrics computed during rendering (final treated image).
+        # Fallback order: element_contrast_metrics -> effective_contrast_metrics -> contrast_metrics -> recompute.
+        def _select_contrast_metrics(img: Image.Image, key: str, canvas_kind: str) -> Dict[str, Any]:
+            # element_contrast_metrics stores a mapping like {"feed": {...}} or {"story": {...}}
+            elem = img.info.get("element_contrast_metrics")
+            if elem and isinstance(elem, dict) and key in elem:
+                return elem[key]
+            eff = img.info.get("effective_contrast_metrics")
+            if eff and isinstance(eff, dict) and eff.get("canvas_kind") == canvas_kind:
+                return eff
+            cm = img.info.get("contrast_metrics")
+            if cm and isinstance(cm, dict) and cm.get("canvas_kind") == canvas_kind:
+                return cm
+            # Last resort: recompute from the treated base image
+            return image_renderer.compute_local_contrast_metrics(image_renderer.add_dark_gradient(img.convert("RGB")), canvas_kind)
+
+        feed_contrast_metrics = _select_contrast_metrics(feed_image, "feed", "feed")
+        story_contrast_metrics = _select_contrast_metrics(story_image, "story", "story")
+
+        # Combined overall pass should reflect final treated result (element-level metrics if present)
+        combined_contrast = {
+            "overall_pass": bool(feed_contrast_metrics.get("overall_pass") and story_contrast_metrics.get("overall_pass")),
+            "feed": feed_contrast_metrics,
+            "story": story_contrast_metrics,
+        }
+        qa_report = creative_engine_v3.build_prepublish_qa_report(
+            ad_copy=ad_copy,
+            slot=slot,
+            campaign_name=campaign["name"],
+            background_path=chosen_background,
+            background_meta=background_choice.get("metadata") or creative_engine_v3.classify_background(chosen_background),
+            territory=territory,
+            recent_headlines=recent_headlines,
+            has_badges=has_badges,
+            contrast_metrics=combined_contrast,
+            captions=platform_captions,
+        )
+        print("QA report:\n{0}".format(json.dumps(qa_report, indent=2)))
+
+        feed_local_path = config.OUTPUT_IMAGES_FEED_DIR / "prayonit-feed-{0}.jpg".format(timestamp)
+        story_local_path = config.OUTPUT_IMAGES_STORY_DIR / "prayonit-story-{0}.jpg".format(timestamp)
+        feed_image.save(feed_local_path, quality=95)
+        story_image.save(story_local_path, quality=95)
+        print("Saved feed preview: {0}".format(feed_local_path.resolve()))
+        print("Saved story preview: {0}".format(story_local_path.resolve()))
+    else:
+        print("Static feed/story rendering skipped by SOCIAL_OUTPUT_MODE=reels_only")
 
     # Optional local-only video rendering. Short formats keep using the
     # existing 8-second motion renderer; long-form prayer/devotional/
     # encouragement formats route to the long-form compositor.
     video_local_path = None
+    video_generation_error = None
     if config.VIDEO_ENABLED:
         import long_form_renderer
         import motion_renderer
 
         try:
             todays_content = content_engine.get_todays_content(slot=slot)
-            presentation_config = content_engine.get_presentation_config(todays_content)
+            presentation_config = {**content_engine.get_presentation_config(todays_content), "slot": slot}
             video_template = presentation_config.get("video_template", "short_promo")
             if video_template in ("long_prayer", "long_devotional", "long_encouragement"):
                 filename_suffix = video_template.replace("long_", "")
@@ -585,7 +1121,9 @@ def cmd_run(slot) -> int:
                     print("Saved motion video preview: {0}".format(video_local_path.resolve()))
         except Exception as exc:
             # Video generation is best-effort and local-only in this phase;
-            # it must never block or fail the existing feed/story run.
+            # it must never block static full-output runs, but reels-only
+            # production depends on a valid final video.
+            video_generation_error = exc
             print("Motion video generation skipped due to error: {0}".format(exc), file=sys.stderr)
 
     history_store.update_run_record(
@@ -600,7 +1138,51 @@ def cmd_run(slot) -> int:
         print("{0}=true, so nothing was uploaded or posted.".format(mode_label))
         return 0
 
-    if creative_engine_v3.should_block_buffer(qa_report):
+    if reels_only_output and video_local_path is None:
+        reason = "Video-specific failure: no final video was produced"
+        if video_generation_error is not None:
+            reason = "Video-specific failure: {0}".format(video_generation_error)
+        history_store.update_run_record(run_row_id, status="failed", error_message=reason)
+        print(reason)
+        print("BLOCKED: slot={0} video-specific failure".format(slot))
+        return 2
+
+    tiktok_manual_handoff = None
+    long_form_video_templates = {"long_prayer", "long_devotional", "long_encouragement"}
+    todays_content = content_engine.get_todays_content(slot=slot)
+    presentation_config = {**content_engine.get_presentation_config(todays_content), "slot": slot}
+    video_template = presentation_config.get("video_template", "short_promo")
+    manual_handoff_requested = (
+        config.TIKTOK_MANUAL_HANDOFF
+        and not config.PREVIEW_MODE
+        and video_template in long_form_video_templates
+    )
+    video_handoff_eligible = manual_handoff_requested and video_local_path is not None
+    if video_handoff_eligible:
+        tiktok_manual_handoff = _create_tiktok_manual_handoff(
+            video_local_path=Path(video_local_path),
+            ad_copy=ad_copy,
+            selection=selection,
+            presentation_config=presentation_config,
+            due_at_iso=due_at_iso,
+            slot=slot,
+            run_row_id=run_row_id,
+        )
+        print(f"Creator Search Insights topic: {tiktok_manual_handoff['creator_search_topic']}")
+        print(f"Local backup MP4 path: {tiktok_manual_handoff['backup_path'].resolve()}")
+        print(f"Caption text path: {tiktok_manual_handoff['notes_path'].resolve()}")
+        print(f"Apple Photos import attempted: {tiktok_manual_handoff['photos_status']['attempted']}")
+        print(f"Apple Photos import succeeded: {tiktok_manual_handoff['photos_status']['succeeded']}")
+        print(f"Added to {config.TIKTOK_PHOTOS_ALBUM_NAME}: {tiktok_manual_handoff['photos_status']['album_added']}")
+        print(f"Already imported: {tiktok_manual_handoff['photos_status']['already_imported']}")
+        print(f"Apple Note attempted: {tiktok_manual_handoff['note_status']['attempted']}")
+        print(f"Apple Note succeeded: {tiktok_manual_handoff['note_status']['succeeded']}")
+    elif manual_handoff_requested:
+        print("TikTok video handoff blocked due to video-specific failure")
+
+    if qa_report is not None and creative_engine_v3.should_block_buffer(qa_report):
+        if tiktok_manual_handoff is not None:
+            print("TikTok video handoff allowed despite unrelated static QA failure")
         reason = "QA critical failure(s): " + ", ".join(qa_report.get("critical_failures", []))
         history_store.update_run_record(run_row_id, status="failed", error_message=reason)
         print(reason)
@@ -608,17 +1190,22 @@ def cmd_run(slot) -> int:
         print("BLOCKED: slot={0} QA failures: {1}".format(slot, qa_report.get("critical_failures", [])))
         return 2
 
-    feed_remote_path, feed_url = image_renderer.upload_generated(
-        feed_local_path, config.GENERATED_FEED_PREFIX, supabase
-    )
-    print("Uploaded feed image: {0}".format(feed_remote_path))
-    print("Feed public URL: {0}".format(feed_url))
+    feed_remote_path = None
+    feed_url = None
+    story_remote_path = None
+    story_url = None
+    if not reels_only_output:
+        feed_remote_path, feed_url = image_renderer.upload_generated(
+            feed_local_path, config.GENERATED_FEED_PREFIX, supabase
+        )
+        print("Uploaded feed image: {0}".format(feed_remote_path))
+        print("Feed public URL: {0}".format(feed_url))
 
-    story_remote_path, story_url = image_renderer.upload_generated(
-        story_local_path, config.GENERATED_STORY_PREFIX, supabase
-    )
-    print("Uploaded story image: {0}".format(story_remote_path))
-    print("Story public URL: {0}".format(story_url))
+        story_remote_path, story_url = image_renderer.upload_generated(
+            story_local_path, config.GENERATED_STORY_PREFIX, supabase
+        )
+        print("Uploaded story image: {0}".format(story_remote_path))
+        print("Story public URL: {0}".format(story_url))
 
     # Phase 2A: optional video upload + publish. Only runs when both
     # VIDEO_ENABLED produced a local video AND VIDEO_PUBLISH_ENABLED=true.
@@ -644,12 +1231,14 @@ def cmd_run(slot) -> int:
         status="published",
     )
 
-    buffer_jobs = [
-        ("facebook", "post", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], feed_url, None, tracked_urls["facebook"]),
-        ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], feed_url, None, tracked_urls["instagram"]),
-        ("facebook", "story", config.FACEBOOK_CHANNEL_ID, "", story_url, None, None),
-        ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, "", story_url, None, None),
-    ]
+    buffer_jobs = []
+    if not reels_only_output:
+        buffer_jobs.extend([
+            ("facebook", "post", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], feed_url, None, tracked_urls["facebook"]),
+            ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], feed_url, None, tracked_urls["instagram"]),
+            ("facebook", "story", config.FACEBOOK_CHANNEL_ID, "", story_url, None, None),
+            ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, "", story_url, None, None),
+        ])
 
     if video_url is not None:
         # Same generated MP4 (video_url) is reused for all three video
@@ -660,8 +1249,20 @@ def cmd_run(slot) -> int:
         buffer_jobs.extend([
             ("facebook", "reel", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], None, video_url, None),
             ("instagram", "reel", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
-            ("tiktok", "video", config.TIKTOK_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
         ])
+        if config.TIKTOK_MANUAL_HANDOFF and video_local_path is not None:
+            print("Buffer skipped for TikTok: true")
+            if tiktok_manual_handoff["photos_status"]["succeeded"]:
+                print("TikTok manual handoff ready in Apple Photos")
+            else:
+                print("TikTok handoff created locally; Apple Photos import failed")
+        elif not reels_only_output:
+            buffer_jobs.append(
+                ("tiktok", "video", config.TIKTOK_CHANNEL_ID, platform_captions["instagram"], None, video_url, None)
+            )
+        else:
+            print("Buffer skipped for TikTok: true")
+            print("TikTok automatic Buffer publish disabled by SOCIAL_OUTPUT_MODE=reels_only")
 
     successes = []
     failures = []
@@ -715,6 +1316,8 @@ def cmd_run(slot) -> int:
             failures.append(label)
 
     print("\n--- Run summary ---")
+    if reels_only_output:
+        print("Skipped by output mode: Facebook feed, Instagram feed, Facebook story, Instagram story")
     print("Succeeded ({0}): {1}".format(len(successes), ", ".join(successes) if successes else "none"))
     print("Failed ({0}): {1}".format(len(failures), ", ".join(failures) if failures else "none"))
     if failures:
@@ -746,6 +1349,12 @@ def main():
     elif command == "history":
         cmd_history(days=args.days)
         return 0
+    elif command == "retry-tiktok-handoff":
+        try:
+            return cmd_retry_tiktok_handoff(video=args.video, notes=args.notes)
+        except Exception as exc:
+            print(f"FAILED: retry-tiktok-handoff execution error: {exc}", file=sys.stderr)
+            return 1
     elif command == "campaigns":
         cmd_campaigns()
         return 0
