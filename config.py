@@ -28,7 +28,8 @@ import yaml
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 
-load_dotenv()
+# Do not let .env override variables supplied by the invoking command.
+load_dotenv(override=False)
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 BRANDS_DIR = PROJECT_ROOT / "brands"
@@ -195,11 +196,12 @@ VIDEO_ENABLED = os.getenv("VIDEO_ENABLED", "false").strip().lower() == "true"
 # unless explicitly opted in.
 VIDEO_PUBLISH_ENABLED = os.getenv("VIDEO_PUBLISH_ENABLED", "false").strip().lower() == "true"
 SOCIAL_OUTPUT_MODE = os.getenv("SOCIAL_OUTPUT_MODE", "reels_only").strip().lower() or "reels_only"
-TIKTOK_MANUAL_HANDOFF = os.getenv("TIKTOK_MANUAL_HANDOFF", "false").strip().lower() == "true"
-TIKTOK_IMPORT_TO_PHOTOS = os.getenv("TIKTOK_IMPORT_TO_PHOTOS", "false").strip().lower() == "true"
-TIKTOK_PHOTOS_ALBUM_NAME = os.getenv("TIKTOK_PHOTOS_ALBUM_NAME", "Prayonit TikTok Ready").strip() or "Prayonit TikTok Ready"
-TIKTOK_CREATE_APPLE_NOTE = os.getenv("TIKTOK_CREATE_APPLE_NOTE", "false").strip().lower() == "true"
-TIKTOK_NOTES_FOLDER_NAME = os.getenv("TIKTOK_NOTES_FOLDER_NAME", "Prayonit TikTok Ready").strip() or "Prayonit TikTok Ready"
+TIKTOK_INCLUDE_LINK_IN_BIO = os.getenv("TIKTOK_INCLUDE_LINK_IN_BIO", "false").strip().lower() == "true"
+
+
+def get_social_output_mode() -> str:
+    """Resolve the current process override before falling back to config."""
+    return os.getenv("SOCIAL_OUTPUT_MODE", SOCIAL_OUTPUT_MODE).strip().lower() or "reels_only"
 
 # ---------- Long-form voiceover (Phase: Gemini TTS / local-only rollout) ----------
 # Voice is disabled by default so the existing long-form compositor stays
@@ -236,7 +238,6 @@ OUTPUT_VIDEOS_LONG_DIR = OUTPUT_VIDEOS_DIR / "long"
 OUTPUT_AUDIO_DIR = OUTPUT_DIR / "audio"
 OUTPUT_PREVIEWS_DIR = OUTPUT_DIR / "previews"
 OUTPUT_TEMP_DIR = OUTPUT_DIR / "temp"
-OUTPUT_TIKTOK_HANDOFF_DIR = OUTPUT_DIR / "tiktok_handoff"
 for _generated_output_dir in (
     OUTPUT_IMAGES_FEED_DIR,
     OUTPUT_IMAGES_STORY_DIR,
@@ -245,7 +246,6 @@ for _generated_output_dir in (
     OUTPUT_AUDIO_DIR,
     OUTPUT_PREVIEWS_DIR,
     OUTPUT_TEMP_DIR,
-    OUTPUT_TIKTOK_HANDOFF_DIR,
 ):
     _generated_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -324,14 +324,10 @@ def require_env(test_mode: bool, preview_mode: bool = False) -> None:
             "BUFFER_FACEBOOK_CHANNEL_ID",
             "BUFFER_INSTAGRAM_CHANNEL_ID",
         ]
-        # BUFFER_TIKTOK_CHANNEL_ID is only required when video publishing is
-        # actually enabled (VIDEO_PUBLISH_ENABLED=true); it is never required
-        # when video publishing is disabled, matching the Phase 2A design
-        # where TikTok is one of three video-only destinations queued
-        # alongside Facebook Reel/Instagram Reel.
-        if VIDEO_PUBLISH_ENABLED and SOCIAL_OUTPUT_MODE == "full":
-            if not TIKTOK_MANUAL_HANDOFF:
-                required.append("BUFFER_TIKTOK_CHANNEL_ID")
+        # TikTok is an automatic video destination alongside Facebook Reel
+        # and Instagram Reel in both full and reels-only production modes.
+        if VIDEO_PUBLISH_ENABLED:
+            required.append("BUFFER_TIKTOK_CHANNEL_ID")
     missing = [name for name in required if not os.getenv(name)]
     if not get_gemini_primary_api_key():
         missing.append("Gemini API key")

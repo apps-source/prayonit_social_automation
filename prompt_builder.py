@@ -557,6 +557,9 @@ def build_creative_brief_preamble(slot: str, resolved_brief: Optional[Any] = Non
             "",
             "Engagement Prompt:",
             engagement_prompt.get("prompt", ""),
+            "",
+            "Engagement Line Requirement:",
+            "Use the resolved Engagement Prompt above verbatim as engagement_line. Do not replace it with a different question or invitation.",
         ]
 
     if soft_promotion:
@@ -1162,6 +1165,8 @@ def parse_ad_copy_response(
             raise RuntimeError(f"Gemini response is missing '{key}': {data}")
 
     ad_copy: Dict[str, Any] = {key: str(data[key]).strip() for key in REQUIRED_AD_COPY_KEYS}
+    if "tiktok_caption" in data and str(data.get("tiktok_caption", "")).strip():
+        ad_copy["tiktok_caption"] = str(data["tiktok_caption"]).strip()
     if "threads_caption" in data and str(data.get("threads_caption", "")).strip():
         ad_copy["threads_caption"] = str(data["threads_caption"]).strip()
 
@@ -1177,6 +1182,21 @@ def parse_ad_copy_response(
         )
     )
     return ad_copy
+
+
+def enforce_resolved_engagement_line(
+    ad_copy: Dict[str, Any], resolved_brief: Optional[Any]
+) -> Dict[str, Any]:
+    """Keep Gemini's optional line identical to the canonical brief selection."""
+    if resolved_brief is None or not resolved_brief.engagement_prompt:
+        return ad_copy
+    enforced = dict(ad_copy)
+    expected = resolved_brief.engagement_prompt
+    actual = str(enforced.get("engagement_line", "")).strip()
+    if actual != expected:
+        print("Gemini engagement_line corrected to the resolved engagement prompt.")
+        enforced["engagement_line"] = expected
+    return enforced
 
 
 def generate_ad_copy(
@@ -1236,7 +1256,9 @@ def generate_ad_copy(
 
     raw = (response.text or "").strip()
     ad_copy = parse_ad_copy_response(raw, slot=slot)
-    return apply_brand_enforcement(ad_copy, config.BRAND_RULES)
+    return enforce_resolved_engagement_line(
+        apply_brand_enforcement(ad_copy, config.BRAND_RULES), resolved_brief
+    )
 
 
 def generate_local_ad_copy(
@@ -1342,7 +1364,9 @@ def generate_local_ad_copy(
             }
         )
     ad_copy.update(long_form)
-    return apply_brand_enforcement(ad_copy, config.BRAND_RULES)
+    return enforce_resolved_engagement_line(
+        apply_brand_enforcement(ad_copy, config.BRAND_RULES), resolved_brief
+    )
 
 
 _URL_PATTERN = re.compile(r"https?://\S+", flags=re.IGNORECASE)

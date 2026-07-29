@@ -2,23 +2,63 @@
   "pain_points": {
     "overwhelm": {
       "aliases": ["overwhelmed", "feeling overwhelmed", "overwhelm"],
-      "safe_categories": ["Work & Ambition", "Family & Parenting"]
+      "safe_categories": ["Work & Ambition", "Family & Parenting"],
+      "fallback_emotions": ["overwhelm", "stress", "pressure", "exhaustion"]
     },
     "anxiety": {
       "aliases": ["anxious", "anxiety", "feeling anxious"],
-      "safe_categories": ["Sleep & Nighttime", "Health & Body", "Loneliness & Belonging", "Fear & Uncertainty"]
+      "safe_categories": ["Sleep & Nighttime", "Health & Body", "Loneliness & Belonging", "Fear & Uncertainty"],
+      "fallback_emotions": ["anxiety", "worry", "fear", "uncertainty", "restlessness", "overthinking"]
     },
     "worry": {
       "aliases": ["worried", "worry", "feeling worried"],
-      "safe_categories": ["Money & Security", "Family & Parenting", "Fear & Uncertainty"]
+      "safe_categories": ["Money & Security", "Family & Parenting", "Fear & Uncertainty"],
+      "fallback_emotions": ["worry", "anxiety", "fear", "uncertainty", "stress"]
     },
     "burnout": {
       "aliases": ["burned out", "burnout", "burnt out"],
-      "safe_categories": ["Work & Ambition"]
+      "safe_categories": ["Work & Ambition"],
+      "fallback_emotions": ["burnout", "exhaustion", "stress", "pressure"]
     },
     "exhaustion": {
-      "aliases": ["exhausted", "exhaustion", "feeling exhausted"],
-      "safe_categories": ["Work & Ambition", "Sleep & Nighttime", "Family & Parenting"]
+      "aliases": ["exhausted", "exhaustion", "feeling exhausted", "tired", "weary"],
+      "safe_categories": ["Work & Ambition", "Sleep & Nighttime", "Family & Parenting"],
+      "fallback_emotions": ["exhaustion", "tired", "weary", "burnout", "fatigue"]
+    },
+    "hope": {
+      "aliases": ["hopeful", "hope", "needing hope", "relieved"],
+      "safe_categories": ["Faith & Spiritual Life", "Fear & Uncertainty"],
+      "fallback_emotions": ["hope", "encouragement", "renewal", "trust", "uncertainty"]
+    },
+    "gratitude": {
+      "aliases": ["grateful", "gratitude", "reflective", "unsettled"],
+      "safe_categories": ["Faith & Spiritual Life"],
+      "fallback_emotions": ["gratitude", "grateful", "reflective", "peace"]
+    },
+    "focus": {
+      "aliases": ["scattered", "focus", "distracted"],
+      "safe_categories": ["Faith & Spiritual Life"],
+      "fallback_emotions": ["focus", "scattered", "distraction", "curiosity"]
+    },
+    "curiosity": {
+      "aliases": ["curious", "curiosity"],
+      "safe_categories": ["Faith & Spiritual Life"],
+      "fallback_emotions": ["curiosity", "focus", "hope", "uncertainty"]
+    },
+    "grief": {
+      "aliases": ["grief", "loss", "grieving"],
+      "safe_categories": ["Grief & Loss", "Faith & Spiritual Life", "Family & Parenting"],
+      "fallback_emotions": ["grief", "loss", "anger", "sadness", "longing"]
+    },
+    "anger": {
+      "aliases": ["anger", "angry"],
+      "safe_categories": ["Faith & Spiritual Life", "Marriage & Relationships"],
+      "fallback_emotions": ["anger", "resentment", "hurt", "grief"]
+    },
+    "doubt": {
+      "aliases": ["doubt", "prayer difficulty"],
+      "safe_categories": ["Faith & Spiritual Life"],
+      "fallback_emotions": ["doubt", "discouragement", "uncertainty", "distance"]
     }
   }
 }

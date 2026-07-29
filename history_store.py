@@ -37,6 +37,9 @@ SCHEMA_STATEMENTS = [
         cta_text TEXT,
         destination_url TEXT,
         voice_style_profile TEXT,
+        engagement_prompt_type TEXT,
+        resolved_engagement_prompt TEXT,
+        engagement_selection_reason TEXT,
         background_object_path TEXT,
         generated_feed_object_path TEXT,
         generated_story_object_path TEXT,
@@ -161,6 +164,9 @@ def initialize_database() -> None:
             "cta_text",
             "destination_url",
             "voice_style_profile",
+            "engagement_prompt_type",
+            "resolved_engagement_prompt",
+            "engagement_selection_reason",
         ):
             if column_name not in existing_columns:
                 conn.execute(f"ALTER TABLE campaigns_used ADD COLUMN {column_name} TEXT")
@@ -196,8 +202,10 @@ def create_run_record(
                 selected_creator_search_topic, background_object_path,
                 resolved_brief_json, pain_point_id, life_moment_id,
                 life_moment_text, hook_style, content_type, campaign_id,
-                cta_text, destination_url, voice_style_profile, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cta_text, destination_url, voice_style_profile,
+                engagement_prompt_type, resolved_engagement_prompt,
+                engagement_selection_reason, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -223,6 +231,9 @@ def create_run_record(
                 (resolved_brief or {}).get("cta_text"),
                 (resolved_brief or {}).get("destination_url"),
                 (resolved_brief or {}).get("voice_style_profile"),
+                (resolved_brief or {}).get("engagement_prompt_type"),
+                (resolved_brief or {}).get("engagement_prompt"),
+                (resolved_brief or {}).get("engagement_selection_reason"),
                 status,
             ),
         )
@@ -348,6 +359,21 @@ def save_post_error(
             ),
         )
         return cursor.lastrowid
+
+
+def get_platform_delivery_state(
+    *, run_id: str, platform: str, post_type: str
+) -> Optional[sqlite3.Row]:
+    """Return the latest delivery record for one idempotent platform job."""
+    with _connect() as conn:
+        return conn.execute(
+            """
+            SELECT * FROM published_posts
+            WHERE run_id = ? AND platform = ? AND post_type = ?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (run_id, platform, post_type),
+        ).fetchone()
 
 
 def get_recent_campaign_history(days: int = 30, exclude_statuses: Optional[Iterable[str]] = None) -> List[sqlite3.Row]:

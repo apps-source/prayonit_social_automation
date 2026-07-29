@@ -296,17 +296,50 @@ def choose_background(
       2) avoid same campaign+formula+background combo too soon
       3) maximize emotional/time compatibility score
     """
+    allowed_times = {
+        "morning": {"morning", "sunrise", "anytime", "neutral"},
+        "evening": {"evening", "night", "anytime", "neutral"},
+    }.get(slot, {"anytime", "neutral"})
+    preferred_times = {
+        "morning": {"morning", "sunrise"},
+        "evening": {"evening", "night"},
+    }.get(slot, set())
+    classified_backgrounds = [
+        (background, creative_engine_v3.classify_background(background))
+        for background in all_backgrounds
+    ]
+    compatible_backgrounds = [
+        item for item in classified_backgrounds
+        if str(item[1].get("time", "neutral")).lower() in allowed_times
+    ]
+    if not compatible_backgrounds:
+        print("No {0}-compatible background assets were available.".format(slot))
+        raise RuntimeError("No slot-compatible background asset is available before rendering.")
+
+    slot_specific_backgrounds = [
+        item for item in compatible_backgrounds
+        if str(item[1].get("time", "neutral")).lower() in preferred_times
+    ]
+    if slot_specific_backgrounds:
+        eligible_backgrounds = slot_specific_backgrounds
+        slot_fallback_rule = None
+    else:
+        eligible_backgrounds = compatible_backgrounds
+        slot_fallback_rule = "no {0}-specific asset; using neutral/anytime fallback".format(slot)
+        print("No {0}-specific background assets; using neutral/anytime fallback.".format(slot))
+
     recent_rows = history_store.get_recent_campaign_history(days=max(30, config.HISTORY_BACKGROUND_DAYS))
     recent_backgrounds = {
         row["background_object_path"] for row in recent_rows
         if row["background_object_path"]
     }
 
-    pool = [b for b in all_backgrounds if b not in recent_backgrounds]
-    relaxed_rule = None
+    pool = [item for item in eligible_backgrounds if item[0] not in recent_backgrounds]
+    relaxed_rule = slot_fallback_rule
     if not pool:
-        pool = list(all_backgrounds)
-        relaxed_rule = f"avoid same background for {config.HISTORY_BACKGROUND_DAYS} days"
+        pool = list(eligible_backgrounds)
+        recency_rule = f"avoid same background for {config.HISTORY_BACKGROUND_DAYS} days"
+        relaxed_rule = "; ".join(rule for rule in (relaxed_rule, recency_rule) if rule)
 
     campaign_name = campaign.get("name") if campaign else None
     formula_name = formula.get("name") if formula else None
@@ -319,7 +352,7 @@ def choose_background(
         if row["background_object_path"]:
             too_soon_combo.add(row["background_object_path"])
 
-    strict_pool = [b for b in pool if b not in too_soon_combo]
+    strict_pool = [item for item in pool if item[0] not in too_soon_combo]
     if strict_pool:
         pool = strict_pool
     elif not relaxed_rule:
@@ -338,8 +371,7 @@ def choose_background(
             goal=(campaign or {}).get("goal", ""),
         )
     scored = []
-    for bg in pool:
-        meta = creative_engine_v3.classify_background(bg)
+    for bg, meta in pool:
         score = creative_engine_v3.background_match_score(
             background_meta=meta,
             territory=territory,
@@ -358,6 +390,7 @@ def choose_background(
         "emotional_territory": territory,
         "_relaxed_rule": relaxed_rule,
         "resolved_brief_applied": resolved_brief is not None,
+        "slot_compatible": True,
     }
 
 

@@ -82,7 +82,10 @@ def test_recent_background_reuse_prevention(monkeypatch):
         formula=formula,
         persona=None,
     )
-    assert choice["path"] != "night_starfield_mountain.jpg"
+    # The only alternative is a morning-only asset, which is not safe for an
+    # evening run. Recency may relax, but slot compatibility never may.
+    assert choice["path"] == "night_starfield_mountain.jpg"
+    assert "avoid same background" in choice["_relaxed_rule"]
 
 
 def test_locked_benefit_exact_match():

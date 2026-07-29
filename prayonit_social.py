@@ -167,6 +167,41 @@ def _resolve_creator_search_topic(
     )
 
 
+def build_tiktok_caption(
+    ad_copy: Dict[str, Any],
+    selection: Dict[str, Any],
+    brief: resolved_content_brief.ResolvedContentBrief,
+) -> str:
+    """Return TikTok-native copy without inheriting Instagram by default."""
+    dedicated = str(ad_copy.get("tiktok_caption", "")).strip()
+    if dedicated:
+        caption = dedicated
+    else:
+        parts = [
+            str(ad_copy.get("opening_hook", "")).strip(),
+            str(brief.life_moment_text or ad_copy.get("pain_headline", "")).strip(),
+            "Come pray with me.",
+        ]
+        caption = "\n\n".join(dict.fromkeys(part for part in parts if part))
+
+    if not config.TIKTOK_INCLUDE_LINK_IN_BIO:
+        caption = re.sub(r"\s*link in bio\.?", "", caption, flags=re.IGNORECASE).strip()
+
+    campaign = selection.get("campaign") or {}
+    hashtags = campaign.get("tiktok_hashtags") or campaign.get("instagram_hashtags") or ["#Prayonit", "#Prayer"]
+    clean_hashtags = []
+    for hashtag in hashtags:
+        value = str(hashtag).strip()
+        if value and value not in clean_hashtags:
+            clean_hashtags.append(value if value.startswith("#") else "#" + value)
+    if "#Prayonit" not in clean_hashtags:
+        clean_hashtags.insert(0, "#Prayonit")
+    return "{0}\n\n{1}".format(caption, " ".join(clean_hashtags)).strip()
+
+
+# Deprecated legacy handoff helpers. They have no CLI entry point, runtime
+# call site, or active configuration and are retained temporarily only so
+# historical local packages remain diagnosable outside normal runs.
 def _load_tiktok_handoff_manifest(manifest_path: Path) -> Dict[str, Any]:
     if not manifest_path.exists():
         return {"imports": {}}
@@ -631,13 +666,6 @@ def build_arg_parser():
     history_parser = subparsers.add_parser("history", help="Print recent campaign run history.")
     history_parser.add_argument("--days", type=int, default=30)
 
-    retry_tiktok_parser = subparsers.add_parser(
-        "retry-tiktok-handoff",
-        help="Retry Apple Photos and Apple Notes handoff for an existing local TikTok package.",
-    )
-    retry_tiktok_parser.add_argument("--video", required=True)
-    retry_tiktok_parser.add_argument("--notes", required=True)
-
     subparsers.add_parser("campaigns", help="List all available campaigns.")
     subparsers.add_parser("database-init", help="Initialize the local SQLite database.")
 
@@ -713,29 +741,13 @@ def cmd_history(days):
         )
 
 
-def cmd_retry_tiktok_handoff(video: str, notes: str) -> int:
-    video_path = Path(video)
-    notes_path = Path(notes)
-    if not video_path.exists():
-        raise RuntimeError(f"TikTok handoff video does not exist: {video_path}")
-    if not notes_path.exists():
-        raise RuntimeError(f"TikTok handoff notes file does not exist: {notes_path}")
-
-    result = _retry_tiktok_handoff_package(video_path=video_path, notes_path=notes_path)
-    print(f"TikTok handoff retry video: {video_path.resolve()}")
-    print(f"TikTok handoff retry notes: {notes_path.resolve()}")
-    print(f"Apple Photos import attempted: {result['photos_status']['attempted']}")
-    print(f"Apple Photos import succeeded: {result['photos_status']['succeeded']}")
-    print(f"Apple Note attempted: {result['note_status']['attempted']}")
-    print(f"Apple Note succeeded: {result['note_status']['succeeded']}")
-    return 0
-
-
 def cmd_run(slot) -> int:
     config.require_env(config.TEST_MODE, preview_mode=config.PREVIEW_MODE)
     config.validate_destination_config()
     history_store.initialize_database()
-    output_mode = config.SOCIAL_OUTPUT_MODE if not (config.TEST_MODE or config.PREVIEW_MODE) else "full"
+    # TEST_MODE retains its established static-preview coverage. Production
+    # and PREVIEW_MODE honor an explicit reels-only environment override.
+    output_mode = "full" if config.TEST_MODE else config.get_social_output_mode()
     reels_only_output = output_mode == "reels_only"
 
     run_id = str(uuid.uuid4())
@@ -757,7 +769,7 @@ def cmd_run(slot) -> int:
         campaigns=campaign_candidates,
     )
     brief_report = resolved_content_brief.validate_resolved_content_brief(brief)
-    resolved_content_brief.log_resolved_content_brief(brief)
+    resolved_content_brief.log_resolved_content_brief(brief, brief_report)
     for item in brief_report:
         print("Resolved brief validation [{0}]: {1}".format(item["status"], item["message"]))
     if resolved_content_brief.has_critical_failure(brief_report):
@@ -965,8 +977,10 @@ def cmd_run(slot) -> int:
     print(json.dumps(ad_copy, indent=2))
 
     platform_captions = prompt_builder.build_platform_captions(ad_copy, selection, tracked_urls)
+    tiktok_caption = build_tiktok_caption(ad_copy, selection, brief)
     print("Facebook caption: {0}".format(platform_captions["facebook"]))
     print("Instagram caption: {0}".format(platform_captions["instagram"]))
+    print("TikTok caption: {0}".format(tiktok_caption))
 
     # Enforce locked benefit text before any optional static rendering/QA so
     # all downstream paths see the final approved values.
@@ -1135,6 +1149,14 @@ def cmd_run(slot) -> int:
 
     if config.TEST_MODE or config.PREVIEW_MODE:
         mode_label = "TEST_MODE" if config.TEST_MODE else "PREVIEW_MODE"
+        if config.PREVIEW_MODE:
+            print("TikTok scheduling payload: {0}".format(json.dumps({
+                "channel_id": config.TIKTOK_CHANNEL_ID,
+                "service": "tiktok",
+                "post_type": "video",
+                "due_at_iso": due_at_iso,
+                "caption": tiktok_caption,
+            })))
         print("{0}=true, so nothing was uploaded or posted.".format(mode_label))
         return 0
 
@@ -1147,42 +1169,7 @@ def cmd_run(slot) -> int:
         print("BLOCKED: slot={0} video-specific failure".format(slot))
         return 2
 
-    tiktok_manual_handoff = None
-    long_form_video_templates = {"long_prayer", "long_devotional", "long_encouragement"}
-    todays_content = content_engine.get_todays_content(slot=slot)
-    presentation_config = {**content_engine.get_presentation_config(todays_content), "slot": slot}
-    video_template = presentation_config.get("video_template", "short_promo")
-    manual_handoff_requested = (
-        config.TIKTOK_MANUAL_HANDOFF
-        and not config.PREVIEW_MODE
-        and video_template in long_form_video_templates
-    )
-    video_handoff_eligible = manual_handoff_requested and video_local_path is not None
-    if video_handoff_eligible:
-        tiktok_manual_handoff = _create_tiktok_manual_handoff(
-            video_local_path=Path(video_local_path),
-            ad_copy=ad_copy,
-            selection=selection,
-            presentation_config=presentation_config,
-            due_at_iso=due_at_iso,
-            slot=slot,
-            run_row_id=run_row_id,
-        )
-        print(f"Creator Search Insights topic: {tiktok_manual_handoff['creator_search_topic']}")
-        print(f"Local backup MP4 path: {tiktok_manual_handoff['backup_path'].resolve()}")
-        print(f"Caption text path: {tiktok_manual_handoff['notes_path'].resolve()}")
-        print(f"Apple Photos import attempted: {tiktok_manual_handoff['photos_status']['attempted']}")
-        print(f"Apple Photos import succeeded: {tiktok_manual_handoff['photos_status']['succeeded']}")
-        print(f"Added to {config.TIKTOK_PHOTOS_ALBUM_NAME}: {tiktok_manual_handoff['photos_status']['album_added']}")
-        print(f"Already imported: {tiktok_manual_handoff['photos_status']['already_imported']}")
-        print(f"Apple Note attempted: {tiktok_manual_handoff['note_status']['attempted']}")
-        print(f"Apple Note succeeded: {tiktok_manual_handoff['note_status']['succeeded']}")
-    elif manual_handoff_requested:
-        print("TikTok video handoff blocked due to video-specific failure")
-
     if qa_report is not None and creative_engine_v3.should_block_buffer(qa_report):
-        if tiktok_manual_handoff is not None:
-            print("TikTok video handoff allowed despite unrelated static QA failure")
         reason = "QA critical failure(s): " + ", ".join(qa_report.get("critical_failures", []))
         history_store.update_run_record(run_row_id, status="failed", error_message=reason)
         print(reason)
@@ -1241,34 +1228,25 @@ def cmd_run(slot) -> int:
         ])
 
     if video_url is not None:
-        # Same generated MP4 (video_url) is reused for all three video
-        # destinations. Same captions already produced by
-        # build_platform_captions() are reused: Facebook Reel uses the
-        # Facebook caption, Instagram Reel and TikTok use the Instagram
-        # caption (hashtags included, unchanged).
+        # The same generated MP4 is reused for all automatic video destinations.
         buffer_jobs.extend([
             ("facebook", "reel", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], None, video_url, None),
             ("instagram", "reel", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
+            ("tiktok", "video", config.TIKTOK_CHANNEL_ID, tiktok_caption, None, video_url, None),
         ])
-        if config.TIKTOK_MANUAL_HANDOFF and video_local_path is not None:
-            print("Buffer skipped for TikTok: true")
-            if tiktok_manual_handoff["photos_status"]["succeeded"]:
-                print("TikTok manual handoff ready in Apple Photos")
-            else:
-                print("TikTok handoff created locally; Apple Photos import failed")
-        elif not reels_only_output:
-            buffer_jobs.append(
-                ("tiktok", "video", config.TIKTOK_CHANNEL_ID, platform_captions["instagram"], None, video_url, None)
-            )
-        else:
-            print("Buffer skipped for TikTok: true")
-            print("TikTok automatic Buffer publish disabled by SOCIAL_OUTPUT_MODE=reels_only")
 
     successes = []
     failures = []
 
     for service, item_post_type, channel_id, caption, image_url, job_video_url, tracked_url in buffer_jobs:
         label = "{0} {1}".format(service, item_post_type)
+        existing_delivery = history_store.get_platform_delivery_state(
+            run_id=run_id, platform=service, post_type=item_post_type
+        )
+        if existing_delivery and existing_delivery["buffer_status"] == "scheduled":
+            print("Already completed {0}; skipping duplicate Buffer post.".format(label))
+            successes.append(label)
+            continue
         try:
             result = buffer_client.buffer_create_post(
                 channel_id=channel_id,
@@ -1316,6 +1294,15 @@ def cmd_run(slot) -> int:
             failures.append(label)
 
     print("\n--- Run summary ---")
+    print("Delivery Summary:")
+    for label, job_label in (
+        ("Facebook Reel", "facebook reel"),
+        ("Instagram Reel", "instagram reel"),
+        ("TikTok", "tiktok video"),
+    ):
+        state = "queued" if job_label in successes else "failed" if job_label in failures else "not requested"
+        print("- {0}: {1}".format(label, state))
+    print("- Manual TikTok handoff: disabled")
     if reels_only_output:
         print("Skipped by output mode: Facebook feed, Instagram feed, Facebook story, Instagram story")
     print("Succeeded ({0}): {1}".format(len(successes), ", ".join(successes) if successes else "none"))
@@ -1349,12 +1336,6 @@ def main():
     elif command == "history":
         cmd_history(days=args.days)
         return 0
-    elif command == "retry-tiktok-handoff":
-        try:
-            return cmd_retry_tiktok_handoff(video=args.video, notes=args.notes)
-        except Exception as exc:
-            print(f"FAILED: retry-tiktok-handoff execution error: {exc}", file=sys.stderr)
-            return 1
     elif command == "campaigns":
         cmd_campaigns()
         return 0

@@ -1,6 +1,8 @@
 """Tests for campaign_engine.py: selection, seasonality math, non-repetition."""
 from datetime import date
 
+import pytest
+
 import campaign_engine
 import history_store
 
@@ -128,4 +130,33 @@ def test_morning_prayer_campaign_is_morning_only():
     morning_prayer = next(c for c in campaigns if c["name"] == "Morning Prayer")
     assert morning_prayer["eligible_slots"] == ["morning"]
 
+
+def test_evening_background_pool_excludes_morning_only_assets(isolated_database):
+    history_store.initialize_database()
+    chosen = campaign_engine.choose_background(
+        ["morning_sunrise.jpg", "evening_sunset.jpg"], slot="evening"
+    )
+    assert chosen["path"] == "evening_sunset.jpg"
+    assert chosen["slot_compatible"] is True
+
+
+def test_morning_background_pool_excludes_evening_only_assets(isolated_database):
+    history_store.initialize_database()
+    chosen = campaign_engine.choose_background(
+        ["morning_sunrise.jpg", "evening_sunset.jpg"], slot="morning"
+    )
+    assert chosen["path"] == "morning_sunrise.jpg"
+
+
+def test_neutral_background_is_safe_fallback_for_either_slot(isolated_database):
+    history_store.initialize_database()
+    chosen = campaign_engine.choose_background(["plain_landscape.jpg"], slot="evening")
+    assert chosen["metadata"]["time"] == "neutral"
+    assert "neutral/anytime fallback" in chosen["_relaxed_rule"]
+
+
+def test_missing_slot_compatible_background_fails_before_scoring(isolated_database):
+    history_store.initialize_database()
+    with pytest.raises(RuntimeError, match="No slot-compatible background"):
+        campaign_engine.choose_background(["morning_sunrise.jpg"], slot="evening")
 
