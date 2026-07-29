@@ -5,9 +5,11 @@ import wave
 
 import numpy as np
 from PIL import Image
+import pytest
 
 import long_form_renderer
 import prayonit_social
+import resolved_content_brief
 import voice_provider
 
 
@@ -128,6 +130,193 @@ def _presentation(video_template="long_prayer", **overrides):
     }
     config.update(overrides)
     return config
+
+
+def _rolling_profile():
+    return resolved_content_brief.get_caption_profile_definition(
+        "rolling_short",
+        creative_policy_version="1",
+    )
+
+
+def _caption_tokens(text):
+    return text.split()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Lord, calm my heart today, and guide every step I take.",
+        "Wait for me; trust in God: He stays — and He leads.",
+        "“Don’t lose hope,” because God’s love remains with you.",
+    ],
+)
+def test_rolling_phrase_grouping_preserves_every_token_once_and_in_order(text):
+    phrases = long_form_renderer.group_caption_phrases(text, _rolling_profile())
+    assert [token for phrase in phrases for token in _caption_tokens(phrase)] == _caption_tokens(text)
+
+
+def test_rolling_phrase_grouping_prefers_punctuation_and_avoids_trailing_conjunctions():
+    text = "Lord, calm my heart today, and guide every step I take."
+    phrases = long_form_renderer.group_caption_phrases(text, _rolling_profile())
+    assert phrases == [
+        "Lord, calm my heart today,",
+        "and guide every step I take.",
+    ]
+    assert all(
+        phrase.split()[-1].lower() not in {"and", "but", "or", "because", "so", "yet"}
+        for phrase in phrases
+    )
+
+
+def test_rolling_phrase_grouping_rebalances_short_final_group():
+    phrases = long_form_renderer.group_caption_phrases(
+        "God stays close through every difficult moment today",
+        _rolling_profile(),
+    )
+    assert [len(phrase.split()) for phrase in phrases] == [4, 4]
+
+
+@pytest.mark.parametrize("text", ["Amen.", "Trust Him."])
+def test_rolling_phrase_grouping_allows_complete_short_units(text):
+    assert long_form_renderer.group_caption_phrases(text, _rolling_profile()) == [text]
+
+
+def test_rolling_phrase_grouping_preserves_long_words_contractions_and_quotes():
+    text = "“Don’t abandon extraordinarilylongunbrokenword,” because God’s love remains."
+    phrases = long_form_renderer.group_caption_phrases(text, _rolling_profile())
+    rebuilt = " ".join(phrases)
+    assert rebuilt == text
+    assert "extraordinarilylongunbrokenword,”" in rebuilt
+    assert "“Don’t" in rebuilt
+    assert "God’s" in rebuilt
+
+
+@pytest.mark.parametrize("reference", ["Psalm 91:1–2", "1 John 4:18"])
+def test_rolling_phrase_grouping_keeps_scripture_references_together(reference):
+    text = f"{reference} reminds us that perfect love remains near today."
+    phrases = long_form_renderer.group_caption_phrases(text, _rolling_profile())
+    assert any(reference in phrase for phrase in phrases)
+
+
+def test_phrase_timing_is_exact_contiguous_and_inside_parent_window():
+    parent = long_form_renderer.TextCard(
+        "God remains beside you through every uncertain moment today.",
+        10.0,
+        16.0,
+        "script_segment",
+    )
+    phrases = long_form_renderer.group_caption_phrases(parent.text, _rolling_profile())
+    cards = long_form_renderer.allocate_phrase_timing(parent, phrases, _rolling_profile())
+    assert cards[0].start == parent.start
+    assert cards[-1].end == parent.end
+    assert sum(card.end - card.start for card in cards) == pytest.approx(6.0)
+    assert all(left.end == pytest.approx(right.start) for left, right in zip(cards, cards[1:]))
+    assert all(parent.start <= card.start <= card.end <= parent.end for card in cards)
+
+
+def test_phrase_timing_applies_dwell_targets_only_when_feasible():
+    profile = _rolling_profile()
+    feasible = long_form_renderer.allocate_phrase_timing(
+        long_form_renderer.TextCard("one two three four five six", 0.0, 4.0, "script_segment"),
+        ["one two three", "four five six"],
+        profile,
+    )
+    assert all(0.85 <= card.end - card.start <= 3.0 for card in feasible)
+
+    constrained = long_form_renderer.allocate_phrase_timing(
+        long_form_renderer.TextCard("one two three four five six", 0.0, 1.0, "script_segment"),
+        ["one two", "three four", "five six"],
+        profile,
+    )
+    assert constrained[0].start == 0.0
+    assert constrained[-1].end == 1.0
+    assert sum(card.end - card.start for card in constrained) == pytest.approx(1.0)
+
+
+def test_phrase_timing_has_no_drift_across_parent_units():
+    profile = _rolling_profile()
+    parents = [
+        long_form_renderer.TextCard("God remains near through this moment.", 2.5, 6.25, "bridge_line"),
+        long_form_renderer.TextCard("You can trust His steady presence today.", 6.25, 10.75, "script_segment"),
+        long_form_renderer.TextCard("Amen.", 10.75, 11.5, "closing_line"),
+    ]
+    transformed = long_form_renderer.apply_caption_profile(parents, profile)
+    assert transformed[0].start == 2.5
+    assert transformed[-1].end == 11.5
+    assert any(card.end == 6.25 for card in transformed)
+    assert any(card.start == 6.25 for card in transformed)
+    assert any(card.end == 10.75 for card in transformed)
+    assert any(card.start == 10.75 for card in transformed)
+
+
+def test_current_default_caption_profile_is_a_true_no_op():
+    cards = [
+        long_form_renderer.TextCard("Keep this exact caption.", 1.0, 4.0, "script_segment")
+    ]
+    result = long_form_renderer.apply_caption_profile(
+        cards,
+        resolved_content_brief.get_caption_profile_definition("current_default"),
+    )
+    assert result is cards
+
+
+def test_rolling_profile_expands_only_eligible_narrated_body_cards():
+    cards = [
+        long_form_renderer.TextCard("God sees your burden.", 0.0, 2.5, "opening_hook"),
+        long_form_renderer.TextCard("God sees your burden.", 0.0, 2.5, "opening_hook"),
+        long_form_renderer.TextCard("Bring every anxious thought to God right now.", 2.5, 6.0, "bridge_line"),
+        long_form_renderer.TextCard("Come pray with me.", 6.0, 8.0, "cta"),
+        long_form_renderer.TextCard("Save this prayer.", 8.0, 10.0, "engagement_prompt"),
+        long_form_renderer.TextCard("PRAYONIT", 10.0, 12.0, "wordmark"),
+    ]
+    transformed = long_form_renderer.apply_caption_profile(cards, _rolling_profile())
+    assert len([card for card in transformed if card.kind == "opening_hook"]) == 1
+    assert len([card for card in transformed if card.kind == "bridge_line"]) == 2
+    assert [card.text for card in transformed if card.kind == "cta"] == ["Come pray with me."]
+    assert [card.text for card in transformed if card.kind == "engagement_prompt"] == ["Save this prayer."]
+    assert [card.text for card in transformed if card.kind == "wordmark"] == ["PRAYONIT"]
+
+
+def test_rolling_profile_keeps_normal_phrase_layout_to_two_lines():
+    profile = _rolling_profile()
+    _font, wrapped = long_form_renderer._fit_card_text(
+        "God remains beside you today.",
+        long_form_renderer.TARGET_CANVAS_SIZE,
+        "script_segment",
+        caption_profile=profile,
+    )
+    assert len(wrapped.splitlines()) <= 2
+    assert "God remains beside you today." == " ".join(wrapped.splitlines())
+
+
+def test_rolling_profile_uses_profile_fades_and_existing_safe_zone():
+    profile = _rolling_profile()
+    cards = [
+        long_form_renderer.TextCard(
+            "God remains beside you today.",
+            2.5,
+            5.0,
+            "script_segment",
+        )
+    ]
+    layer = long_form_renderer.build_script_layers(
+        cards,
+        long_form_renderer.TARGET_CANVAS_SIZE,
+        caption_profile=profile,
+    )[0]
+    assert layer.fade_in == pytest.approx(0.12)
+    assert layer.fade_out == pytest.approx(0.12)
+    assert layer.position[1] >= int(
+        long_form_renderer.TARGET_CANVAS_SIZE[1] * long_form_renderer.SAFE_ZONE_TOP_FRAC
+    )
+    assert layer.position[1] + layer.image.height <= (
+        long_form_renderer.TARGET_CANVAS_SIZE[1]
+        - int(
+            long_form_renderer.TARGET_CANVAS_SIZE[1]
+            * long_form_renderer.SAFE_ZONE_BOTTOM_FRAC
+        )
+    )
 
 
 def _long_copy(long_form_type="prayer", **overrides):

@@ -1,0 +1,121 @@
+[
+  {
+    "id": "morning_prayer",
+    "label": "Morning Prayer",
+    "allowed_content_types": ["prayer_read", "night_prayer_or_rest"],
+    "allowed_slots": ["morning"],
+    "default_profiles": {}
+  },
+  {
+    "id": "night_prayer",
+    "label": "Night Prayer",
+    "allowed_content_types": ["prayer_read", "night_prayer_or_rest"],
+    "allowed_slots": ["evening"],
+    "default_profiles": {}
+  },
+  {
+    "id": "hope",
+    "label": "Hope",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement", "recognition_engagement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "peace",
+    "label": "Peace",
+    "allowed_content_types": ["prayer_read", "devotional_read", "gratitude_reflection", "hope_encouragement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "anxiety",
+    "label": "Anxiety",
+    "allowed_content_types": ["prayer_read", "devotional_read", "recognition_engagement", "night_prayer_or_rest"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "fear",
+    "label": "Fear",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement", "recognition_engagement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "healing",
+    "label": "Healing",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "protection",
+    "label": "Protection",
+    "allowed_content_types": ["prayer_read", "devotional_read"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "forgiveness",
+    "label": "Forgiveness",
+    "allowed_content_types": ["prayer_read", "devotional_read"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "guidance",
+    "label": "Guidance",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "strength",
+    "label": "Strength",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "gratitude",
+    "label": "Gratitude",
+    "allowed_content_types": ["prayer_read", "devotional_read", "gratitude_reflection"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "family",
+    "label": "Family",
+    "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "bible_verse",
+    "label": "Bible Verse",
+    "allowed_content_types": ["devotional_read", "gratitude_reflection", "recognition_engagement"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "devotional",
+    "label": "Devotional",
+    "allowed_content_types": ["devotional_read", "gratitude_reflection"],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {}
+  },
+  {
+    "id": "general_prayer",
+    "label": "General Prayer",
+    "allowed_content_types": [],
+    "allowed_slots": ["anytime"],
+    "default_profiles": {
+      "hook_profile_id": "current_default",
+      "voice_profile_id": "natural_conversational",
+      "caption_profile_id": "current_default",
+      "scene_profile_id": "current_default",
+      "cta_profile_id": "current_default",
+      "hashtag_profile_id": "current_default"
+    }
+  }
+]

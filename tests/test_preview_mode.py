@@ -145,6 +145,23 @@ def test_preview_mode_uses_generate_ad_copy(isolated_database, monkeypatch, caps
     assert "PREVIEW_MODE=true, so nothing was uploaded or posted." in out
 
 
+def test_caption_profile_override_is_available_only_in_preview_or_test(monkeypatch):
+    monkeypatch.setattr(
+        prayonit_social.config,
+        "CAPTION_PROFILE_PREVIEW_OVERRIDE",
+        "rolling_short",
+    )
+    monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", False)
+    assert prayonit_social._caption_profile_preview_override() is None
+
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", True)
+    assert (
+        prayonit_social._caption_profile_preview_override()
+        == "rolling_short"
+    )
+
+
 def test_preview_mode_never_reaches_upload_logic(isolated_database, monkeypatch, capsys):
     """Requirement: PREVIEW_MODE never reaches upload logic. upload_generated,
     upload_generated_video, buffer_create_post, and create_tracked_link are

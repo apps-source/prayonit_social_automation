@@ -6,7 +6,7 @@ import hashlib
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import config
 from engines import content_engine
@@ -14,6 +14,17 @@ from engines import content_engine
 
 _ALIASES_PATH = Path(__file__).resolve().parent / "creative" / "pain_point_aliases.json"
 _ENGAGEMENT_PROMPTS_PATH = Path(__file__).resolve().parent / "creative" / "engagement_prompt_profiles.json"
+_PRAYER_CATEGORIES_PATH = Path(__file__).resolve().parent / "creative" / "prayer_categories.json"
+_RENDER_PROFILES_PATH = Path(__file__).resolve().parent / "creative" / "render_profiles.json"
+_FALLBACK_PRAYER_CATEGORY_ID = "general_prayer"
+_PROFILE_REGISTRY_KEYS = {
+    "hook_profile_id": "hook_profiles",
+    "voice_profile_id": "voice_profiles",
+    "caption_profile_id": "caption_profiles",
+    "scene_profile_id": "scene_profiles",
+    "cta_profile_id": "cta_profiles",
+    "hashtag_profile_id": "hashtag_profiles",
+}
 _CONTENT_TYPE_SAFE_CATEGORIES = {
     "app_feature": ("Faith & Spiritual Life",),
     "prayer_read": ("Faith & Spiritual Life",),
@@ -42,6 +53,34 @@ def load_engagement_prompt_profiles(path: Optional[Path] = None) -> List[Dict[st
     """Load prompt metadata used to keep engagement aligned to the brief."""
     with (path or _ENGAGEMENT_PROMPTS_PATH).open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def load_prayer_categories(path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Load the controlled prayer-category taxonomy."""
+    with (path or _PRAYER_CATEGORIES_PATH).open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def load_creative_profile_registry(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Load profile IDs that preserve the current production behavior."""
+    with (path or _RENDER_PROFILES_PATH).open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def get_caption_profile_definition(
+    profile_id: str, *, creative_policy_version: Optional[str] = None
+) -> Dict[str, Any]:
+    """Return one validated caption profile without selecting it."""
+    registry = load_creative_profile_registry()
+    active_version = str(registry.get("creative_policy_version", "")).strip()
+    if creative_policy_version is not None and str(creative_policy_version) != active_version:
+        raise RuntimeError(
+            "Caption profile policy version does not match the active creative policy."
+        )
+    profile = registry.get("caption_profiles", {}).get(profile_id)
+    if not isinstance(profile, dict):
+        raise RuntimeError(f"Unknown caption profile ID: {profile_id}")
+    return {"id": profile_id, **profile}
 
 
 def normalize_pain_point(value: str, aliases: Optional[Dict[str, Dict[str, Any]]] = None) -> str:
@@ -97,6 +136,15 @@ class ResolvedContentBrief:
     organic_or_paid: str
     caption_version: str
     resolution_reason: str
+    prayer_category_id: str = _FALLBACK_PRAYER_CATEGORY_ID
+    hook_profile_id: str = "current_default"
+    voice_profile_id: str = "natural_conversational"
+    caption_profile_id: str = "current_default"
+    scene_profile_id: str = "current_default"
+    cta_profile_id: str = "current_default"
+    hashtag_profile_id: str = "current_default"
+    creative_policy_version: str = "1"
+    prayer_category_resolution_reason: str = "backward_compatible_default"
 
     def to_history_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -194,6 +242,210 @@ def _validation(status: str, field: str, message: str) -> Dict[str, str]:
     return {"status": status, "field": field, "message": message}
 
 
+def _category_supports_context(category: Dict[str, Any], *, slot: str, content_type: str) -> bool:
+    allowed_slots = set(category.get("allowed_slots", []))
+    allowed_content_types = set(category.get("allowed_content_types", []))
+    slot_allowed = not allowed_slots or "anytime" in allowed_slots or slot in allowed_slots
+    content_type_allowed = not allowed_content_types or content_type in allowed_content_types
+    return slot_allowed and content_type_allowed
+
+
+def _infer_prayer_category_id(
+    *,
+    slot: str,
+    content_type: str,
+    weekly_theme: str,
+    video_template: str,
+    long_form_type: str,
+    categories: Dict[str, Dict[str, Any]],
+) -> Tuple[Optional[str], str]:
+    normalized_theme = _slugify(weekly_theme)
+    normalized_content_type = _slugify(content_type)
+
+    if "bible_verse" in categories and (
+        normalized_theme == "bible-verse"
+        or normalized_content_type == "bible-verse"
+        or video_template == "bible_verse"
+    ):
+        return "bible_verse", "inferred_from_explicit_bible_verse_format"
+    if "devotional" in categories and (
+        long_form_type == "devotional"
+        or content_type in {"devotional_read", "gratitude_reflection"}
+    ):
+        return "devotional", "inferred_from_devotional_format"
+    if long_form_type == "prayer":
+        if slot == "morning" and "morning_prayer" in categories:
+            return "morning_prayer", "inferred_from_morning_prayer_format"
+        if slot == "evening" and "night_prayer" in categories:
+            return "night_prayer", "inferred_from_evening_prayer_format"
+
+    theme_category_id = normalized_theme.replace("-", "_")
+    if theme_category_id in categories:
+        return theme_category_id, "inferred_from_exact_weekly_theme"
+    return None, "no_safe_category_inference"
+
+
+def _resolve_prayer_category(
+    *,
+    explicit_category_id: str,
+    slot: str,
+    content_type: str,
+    weekly_theme: str,
+    video_template: str,
+    long_form_type: str,
+    category_definitions: Iterable[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], str]:
+    categories = {
+        str(category.get("id", "")).strip(): category
+        for category in category_definitions
+        if str(category.get("id", "")).strip()
+    }
+    fallback = categories.get(_FALLBACK_PRAYER_CATEGORY_ID)
+    if fallback is None:
+        raise RuntimeError("Prayer category configuration is missing general_prayer.")
+
+    requested_id = explicit_category_id.strip()
+    if requested_id:
+        requested = categories.get(requested_id)
+        if requested is None:
+            reason = f"fallback_unknown_explicit_category:{requested_id}"
+            print(
+                "[resolved_content_brief] Prayer category fallback to general_prayer: "
+                f"unknown explicit category '{requested_id}'."
+            )
+            return fallback, reason
+        if not _category_supports_context(requested, slot=slot, content_type=content_type):
+            reason = f"fallback_incompatible_explicit_category:{requested_id}"
+            print(
+                "[resolved_content_brief] Prayer category fallback to general_prayer: "
+                f"'{requested_id}' is incompatible with slot={slot}, content_type={content_type}."
+            )
+            return fallback, reason
+        return requested, "explicit_weekly_category"
+
+    inferred_id, inference_reason = _infer_prayer_category_id(
+        slot=slot,
+        content_type=content_type,
+        weekly_theme=weekly_theme,
+        video_template=video_template,
+        long_form_type=long_form_type,
+        categories=categories,
+    )
+    if inferred_id:
+        inferred = categories[inferred_id]
+        if _category_supports_context(inferred, slot=slot, content_type=content_type):
+            return inferred, inference_reason
+        print(
+            "[resolved_content_brief] Prayer category fallback to general_prayer: "
+            f"inferred category '{inferred_id}' is incompatible with "
+            f"slot={slot}, content_type={content_type}."
+        )
+        return fallback, f"fallback_incompatible_inferred_category:{inferred_id}"
+
+    print(
+        "[resolved_content_brief] Prayer category fallback to general_prayer: "
+        "no safe explicit or inferred category."
+    )
+    return fallback, "fallback_no_safe_category_inference"
+
+
+def _resolve_creative_profile_ids(
+    category: Dict[str, Any], registry: Dict[str, Any]
+) -> Dict[str, str]:
+    global_defaults = registry.get("global_defaults", {})
+    category_defaults = category.get("default_profiles", {})
+    return {
+        field_name: str(
+            category_defaults.get(field_name)
+            or global_defaults.get(field_name)
+            or ""
+        ).strip()
+        for field_name in _PROFILE_REGISTRY_KEYS
+    }
+
+
+def _validate_creative_resolution(brief: ResolvedContentBrief) -> List[Dict[str, str]]:
+    categories = {
+        str(category.get("id", "")).strip(): category
+        for category in load_prayer_categories()
+    }
+    registry = load_creative_profile_registry()
+    results: List[Dict[str, str]] = []
+    category = categories.get(brief.prayer_category_id)
+
+    if category is None:
+        results.append(
+            _validation(
+                "critical failure",
+                "prayer_category_id",
+                "Resolved prayer category is not present in approved configuration.",
+            )
+        )
+    elif not _category_supports_context(
+        category, slot=brief.slot, content_type=brief.content_type
+    ):
+        results.append(
+            _validation(
+                "critical failure",
+                "prayer_category_id",
+                "Resolved prayer category conflicts with the slot or content type.",
+            )
+        )
+    elif brief.prayer_category_resolution_reason.startswith("fallback_"):
+        results.append(
+            _validation(
+                "warning",
+                "prayer_category_id",
+                "Prayer category used the documented general_prayer fallback.",
+            )
+        )
+    else:
+        results.append(
+            _validation(
+                "pass",
+                "prayer_category_id",
+                "Prayer category is approved and compatible.",
+            )
+        )
+
+    if not brief.creative_policy_version:
+        results.append(
+            _validation(
+                "critical failure",
+                "creative_policy_version",
+                "Creative policy version is missing.",
+            )
+        )
+    elif brief.creative_policy_version != str(registry.get("creative_policy_version", "")).strip():
+        results.append(
+            _validation(
+                "critical failure",
+                "creative_policy_version",
+                "Creative policy version is not present in the active registry.",
+            )
+        )
+    else:
+        results.append(
+            _validation("pass", "creative_policy_version", "Creative policy version is valid.")
+        )
+
+    for field_name, registry_key in _PROFILE_REGISTRY_KEYS.items():
+        profile_id = str(getattr(brief, field_name, "")).strip()
+        if not profile_id or profile_id not in registry.get(registry_key, {}):
+            results.append(
+                _validation(
+                    "critical failure",
+                    field_name,
+                    "Resolved creative profile is not present in approved configuration.",
+                )
+            )
+        else:
+            results.append(
+                _validation("pass", field_name, "Resolved creative profile is valid.")
+            )
+    return results
+
+
 def _profile_supports_slot(profile: Dict[str, Any], slot: str) -> bool:
     return slot in profile.get("slots", []) or "anytime" in profile.get("slots", [])
 
@@ -267,7 +519,7 @@ def _select_engagement_prompt(
 def validate_resolved_content_brief(brief: ResolvedContentBrief) -> List[Dict[str, str]]:
     approved_ctas = set(config.BRAND_RULES.get("approved_ctas", []))
     approved_ctas.add(config.BRAND_RULES.get("preferred_cta", ""))
-    results = []
+    results = _validate_creative_resolution(brief)
     aliases = load_pain_point_config()
     if brief.pain_point_id in aliases or brief.resolution_reason.startswith("exact_or_alias_match"):
         results.append(_validation("pass", "pain_point", "Canonical pain point is represented by controlled data."))
@@ -350,6 +602,20 @@ def log_resolved_content_brief(
 ) -> None:
     print("Resolved Content Brief:")
     print(f"- content type: {brief.content_type}")
+    print(f"- prayer category: {brief.prayer_category_id}")
+    print(
+        "- creative profiles: hook={0}, voice={1}, caption={2}, scene={3}, "
+        "cta={4}, hashtag={5}".format(
+            brief.hook_profile_id,
+            brief.voice_profile_id,
+            brief.caption_profile_id,
+            brief.scene_profile_id,
+            brief.cta_profile_id,
+            brief.hashtag_profile_id,
+        )
+    )
+    print(f"- creative policy version: {brief.creative_policy_version}")
+    print(f"- prayer category resolution: {brief.prayer_category_resolution_reason}")
     print(f"- pain point: {brief.pain_point_id}")
     print(f"- Life Moment: {brief.life_moment_text or 'unresolved'}")
     print(f"- campaign: {brief.campaign_name or 'none'}")
@@ -381,6 +647,7 @@ def resolve_content_brief(
     life_moments: Optional[Iterable[Dict[str, Any]]] = None,
     hook_styles: Optional[Iterable[Dict[str, Any]]] = None,
     aliases: Optional[Dict[str, Dict[str, Any]]] = None,
+    caption_profile_override: Optional[str] = None,
 ) -> ResolvedContentBrief:
     configured_aliases = aliases or load_pain_point_config()
     weekly = weekly_content or content_engine.get_todays_content(slot=slot)
@@ -412,6 +679,20 @@ def resolve_content_brief(
         long_form_type = "devotional"
     elif presentation["video_template"] == "long_encouragement":
         long_form_type = "encouragement"
+
+    prayer_category, prayer_category_resolution_reason = _resolve_prayer_category(
+        explicit_category_id=str(weekly.get("prayer_category_id", "")),
+        slot=slot,
+        content_type=str(weekly.get("content_type", "")),
+        weekly_theme=str(weekly.get("theme", "")),
+        video_template=presentation["video_template"],
+        long_form_type=long_form_type,
+        category_definitions=load_prayer_categories(),
+    )
+    profile_registry = load_creative_profile_registry()
+    profile_ids = _resolve_creative_profile_ids(prayer_category, profile_registry)
+    if caption_profile_override:
+        profile_ids["caption_profile_id"] = caption_profile_override.strip()
 
     engagement_type = presentation["engagement_prompt_type"]
     selected_prompt, engagement_selection_reason = _select_engagement_prompt(
@@ -466,4 +747,10 @@ def resolve_content_brief(
         organic_or_paid="organic",
         caption_version="v1",
         resolution_reason=resolution_reason,
+        prayer_category_id=prayer_category["id"],
+        creative_policy_version=str(
+            profile_registry.get("creative_policy_version", "")
+        ).strip(),
+        prayer_category_resolution_reason=prayer_category_resolution_reason,
+        **profile_ids,
     )

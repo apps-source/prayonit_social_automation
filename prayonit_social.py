@@ -741,6 +741,12 @@ def cmd_history(days):
         )
 
 
+def _caption_profile_preview_override():
+    if not (config.TEST_MODE or config.PREVIEW_MODE):
+        return None
+    return config.CAPTION_PROFILE_PREVIEW_OVERRIDE or None
+
+
 def cmd_run(slot) -> int:
     config.require_env(config.TEST_MODE, preview_mode=config.PREVIEW_MODE)
     config.validate_destination_config()
@@ -760,6 +766,13 @@ def cmd_run(slot) -> int:
 
     selection = campaign_engine.choose_selection(slot)
     campaign_candidates = campaign_engine.load_campaigns()
+    caption_profile_override = _caption_profile_preview_override()
+    if caption_profile_override:
+        print(
+            "Caption profile preview override: {0}".format(
+                caption_profile_override
+            )
+        )
     brief = resolved_content_brief.resolve_content_brief(
         run_id=run_id,
         slot=slot,
@@ -767,6 +780,7 @@ def cmd_run(slot) -> int:
         platform_mode=output_mode,
         candidate_campaign=selection["campaign"],
         campaigns=campaign_candidates,
+        caption_profile_override=caption_profile_override,
     )
     brief_report = resolved_content_brief.validate_resolved_content_brief(brief)
     resolved_content_brief.log_resolved_content_brief(brief, brief_report)
@@ -1113,6 +1127,8 @@ def cmd_run(slot) -> int:
                     narration_audio_path=narration_audio_path,
                     narration_duration=narration_duration,
                     narration_segment_timeline=narration_segment_timeline,
+                    caption_profile_id=brief.caption_profile_id,
+                    creative_policy_version=brief.creative_policy_version,
                 )
                 print("Saved long-form video preview: {0}".format(video_local_path.resolve()))
             else:

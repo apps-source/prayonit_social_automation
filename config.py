@@ -176,6 +176,9 @@ TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
 # priority). Defaults to false so existing behavior is unchanged unless
 # explicitly opted in.
 PREVIEW_MODE = os.getenv("PREVIEW_MODE", "false").strip().lower() == "true"
+CAPTION_PROFILE_PREVIEW_OVERRIDE = os.getenv(
+    "CAPTION_PROFILE_PREVIEW_OVERRIDE", ""
+).strip()
 
 
 # ---------- Motion video (Phase: dynamic-video integration, local-only) ----------

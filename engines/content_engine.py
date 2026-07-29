@@ -198,6 +198,7 @@ def get_todays_content(
         "emotion": slot_config.get("emotion", ""),
         "hook_style": slot_config.get("hook_style", ""),
         "objective": slot_config.get("objective", ""),
+        "prayer_category_id": slot_config.get("prayer_category_id", ""),
     }
     todays_content.update(get_presentation_config(slot_config))
     return todays_content
@@ -261,11 +262,9 @@ def get_presentation_config(slot_config: Optional[Dict[str, Any]]) -> Dict[str, 
 # ---------------------------------------------------------------------------
 # Creative library helpers (Playbook-derived JSON files).
 #
-# These helpers are intentionally "load and return data only" — they are
-# not wired into get_todays_content(), build_prompt(), Gemini generation,
-# rendering, uploads, Buffer, or Supabase. They exist so future work can
-# optionally consume this creative library without any production
-# behavior changing today.
+# These helpers load version-controlled creative data. Canonical brief
+# resolution consumes selected libraries before prompt construction; the
+# helpers themselves do not perform rendering, publishing, or remote calls.
 # ---------------------------------------------------------------------------
 
 

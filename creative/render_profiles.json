@@ -1,0 +1,62 @@
+{
+  "creative_policy_version": "1",
+  "global_defaults": {
+    "hook_profile_id": "current_default",
+    "voice_profile_id": "natural_conversational",
+    "caption_profile_id": "current_default",
+    "scene_profile_id": "current_default",
+    "cta_profile_id": "current_default",
+    "hashtag_profile_id": "current_default"
+  },
+  "hook_profiles": {
+    "current_default": {
+      "label": "Current Hook Behavior"
+    }
+  },
+  "voice_profiles": {
+    "natural_conversational": {
+      "label": "Natural Conversational",
+      "voice_style_profile": "natural_conversational"
+    }
+  },
+  "caption_profiles": {
+    "current_default": {
+      "label": "Current Caption Behavior"
+    },
+    "rolling_short": {
+      "label": "Short Rolling Phrase Captions",
+      "mode": "rolling_phrase",
+      "applicable_kinds": [
+        "bridge_line",
+        "script_segment",
+        "closing_line"
+      ],
+      "minimum_words": 3,
+      "preferred_minimum_words": 4,
+      "preferred_maximum_words": 5,
+      "maximum_words": 6,
+      "maximum_lines": 2,
+      "soft_maximum_characters": 44,
+      "minimum_dwell_seconds": 0.85,
+      "maximum_dwell_seconds": 3.0,
+      "fade_in_seconds": 0.12,
+      "fade_out_seconds": 0.12,
+      "internal_transition_lead_seconds": 0.0
+    }
+  },
+  "scene_profiles": {
+    "current_default": {
+      "label": "Current Scene Behavior"
+    }
+  },
+  "cta_profiles": {
+    "current_default": {
+      "label": "Current CTA Behavior"
+    }
+  },
+  "hashtag_profiles": {
+    "current_default": {
+      "label": "Current Hashtag Behavior"
+    }
+  }
+}

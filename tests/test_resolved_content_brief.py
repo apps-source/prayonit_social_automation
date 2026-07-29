@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from dataclasses import replace
 
@@ -15,10 +16,12 @@ def _weekly(
     video_template="short_promo",
     engagement_prompt_enabled=False,
     engagement_prompt_type="none",
+    prayer_category_id=None,
+    theme="strength",
 ):
-    return {
+    weekly = {
         "content_type": content_type,
-        "theme": "strength",
+        "theme": theme,
         "emotion": emotion,
         "hook_style": "recognition",
         "objective": "Offer one gentle next step.",
@@ -35,6 +38,9 @@ def _weekly(
         "engagement_prompt_type": engagement_prompt_type,
         "cta_text": "Come pray with me.",
     }
+    if prayer_category_id is not None:
+        weekly["prayer_category_id"] = prayer_category_id
+    return weekly
 
 
 def _life_moments():
@@ -351,6 +357,299 @@ def test_approved_cta_and_destination_are_preserved():
     assert all(item["status"] != "critical failure" for item in report)
 
 
+def test_explicit_prayer_category_is_resolved():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="hope_encouragement",
+            video_template="long_encouragement",
+            prayer_category_id="hope",
+            theme="release",
+        )
+    )
+    assert brief.prayer_category_id == "hope"
+    assert brief.prayer_category_resolution_reason == "explicit_weekly_category"
+
+
+def test_morning_prayer_category_is_inferred_without_explicit_input():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            theme="strength",
+        )
+    )
+    assert brief.prayer_category_id == "morning_prayer"
+    assert brief.prayer_category_resolution_reason == "inferred_from_morning_prayer_format"
+
+
+def test_night_prayer_category_is_inferred_without_explicit_input():
+    brief = _resolve(
+        slot="evening",
+        weekly_content=_weekly(
+            slot="evening",
+            content_type="prayer_read",
+            video_template="long_prayer",
+            theme="rest",
+        ),
+    )
+    assert brief.prayer_category_id == "night_prayer"
+    assert brief.prayer_category_resolution_reason == "inferred_from_evening_prayer_format"
+
+
+def test_bible_verse_category_is_inferred_from_explicit_format_theme():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="recognition_engagement",
+            video_template="short_engagement",
+            theme="Bible Verse",
+        )
+    )
+    assert brief.prayer_category_id == "bible_verse"
+    assert brief.prayer_category_resolution_reason == "inferred_from_explicit_bible_verse_format"
+
+
+def test_devotional_category_is_inferred_from_existing_format():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="devotional_read",
+            video_template="long_devotional",
+            theme="perseverance",
+        )
+    )
+    assert brief.prayer_category_id == "devotional"
+    assert brief.prayer_category_resolution_reason == "inferred_from_devotional_format"
+
+
+def test_ambiguous_input_uses_documented_general_prayer_fallback(capsys):
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="app_feature",
+            video_template="short_promo",
+            theme="personalized prayer",
+        )
+    )
+    assert brief.prayer_category_id == "general_prayer"
+    assert brief.prayer_category_resolution_reason == "fallback_no_safe_category_inference"
+    assert "fallback to general_prayer" in capsys.readouterr().out
+    report = resolved_content_brief.validate_resolved_content_brief(brief)
+    assert any(
+        item["field"] == "prayer_category_id" and item["status"] == "warning"
+        for item in report
+    )
+
+
+def test_unknown_explicit_category_falls_back_safely(capsys):
+    brief = _resolve(
+        weekly_content=_weekly(prayer_category_id="not_a_real_category")
+    )
+    assert brief.prayer_category_id == "general_prayer"
+    assert brief.prayer_category_resolution_reason == (
+        "fallback_unknown_explicit_category:not_a_real_category"
+    )
+    assert "unknown explicit category" in capsys.readouterr().out
+
+
+def test_incompatible_explicit_category_falls_back_safely():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            prayer_category_id="night_prayer",
+        )
+    )
+    assert brief.prayer_category_id == "general_prayer"
+    assert brief.prayer_category_resolution_reason.startswith(
+        "fallback_incompatible_explicit_category"
+    )
+
+
+def test_category_and_global_profile_defaults_resolve_deterministically():
+    registry = resolved_content_brief.load_creative_profile_registry()
+    category_override = {
+        "default_profiles": {"hook_profile_id": "category_hook"}
+    }
+    custom_registry = {
+        **registry,
+        "global_defaults": {
+            **registry["global_defaults"],
+            "hook_profile_id": "global_hook",
+        },
+    }
+    resolved = resolved_content_brief._resolve_creative_profile_ids(
+        category_override, custom_registry
+    )
+    assert resolved["hook_profile_id"] == "category_hook"
+    assert resolved["caption_profile_id"] == "current_default"
+
+
+def test_policy_version_and_all_profile_ids_are_captured():
+    brief = _resolve()
+    assert brief.creative_policy_version == "1"
+    assert brief.hook_profile_id == "current_default"
+    assert brief.voice_profile_id == "natural_conversational"
+    assert brief.caption_profile_id == "current_default"
+    assert brief.scene_profile_id == "current_default"
+    assert brief.cta_profile_id == "current_default"
+    assert brief.hashtag_profile_id == "current_default"
+
+
+def test_rolling_caption_profile_is_valid_but_not_assigned_by_default():
+    profile = resolved_content_brief.get_caption_profile_definition(
+        "rolling_short",
+        creative_policy_version="1",
+    )
+    assert profile["id"] == "rolling_short"
+    assert profile["mode"] == "rolling_phrase"
+    assert _resolve().caption_profile_id == "current_default"
+
+
+def test_explicit_caption_profile_override_is_resolver_owned():
+    brief = _resolve(caption_profile_override="rolling_short")
+    assert brief.caption_profile_id == "rolling_short"
+    assert not resolved_content_brief.has_critical_failure(
+        resolved_content_brief.validate_resolved_content_brief(brief)
+    )
+
+
+def test_unknown_caption_profile_lookup_fails_safely():
+    with pytest.raises(RuntimeError, match="Unknown caption profile"):
+        resolved_content_brief.get_caption_profile_definition("does_not_exist")
+
+
+def test_caption_profile_lookup_respects_creative_policy_version():
+    with pytest.raises(RuntimeError, match="Creative policy version mismatch"):
+        resolved_content_brief.get_caption_profile_definition(
+            "rolling_short",
+            creative_policy_version="999",
+        )
+
+
+def test_explicit_weekly_categories_are_compatible_with_their_slots_and_types():
+    categories = resolved_content_brief.load_prayer_categories()
+    for day_config in resolved_content_brief.content_engine.load_weekly_rhythm().values():
+        for slot, weekly in day_config.items():
+            explicit_id = weekly.get("prayer_category_id")
+            if not explicit_id:
+                continue
+            presentation = resolved_content_brief.content_engine.get_presentation_config(
+                weekly
+            )
+            long_form_type = {
+                "long_prayer": "prayer",
+                "long_devotional": "devotional",
+                "long_encouragement": "encouragement",
+            }.get(presentation["video_template"], "none")
+            category, reason = resolved_content_brief._resolve_prayer_category(
+                explicit_category_id=explicit_id,
+                slot=slot,
+                content_type=weekly["content_type"],
+                weekly_theme=weekly["theme"],
+                video_template=presentation["video_template"],
+                long_form_type=long_form_type,
+                category_definitions=categories,
+            )
+            assert category["id"] == explicit_id
+            assert reason == "explicit_weekly_category"
+
+
+def test_unknown_profile_reference_is_a_critical_validation_failure():
+    invalid = replace(_resolve(), scene_profile_id="unknown_scene_profile")
+    report = resolved_content_brief.validate_resolved_content_brief(invalid)
+    assert any(
+        item["field"] == "scene_profile_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+
+
+def test_missing_policy_version_is_a_critical_validation_failure():
+    report = resolved_content_brief.validate_resolved_content_brief(
+        replace(_resolve(), creative_policy_version="")
+    )
+    assert any(
+        item["field"] == "creative_policy_version"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+
+
+def test_incompatible_resolved_category_is_a_critical_validation_failure():
+    invalid = replace(
+        _resolve(
+            weekly_content=_weekly(
+                content_type="prayer_read",
+                video_template="long_prayer",
+            )
+        ),
+        prayer_category_id="night_prayer",
+    )
+    report = resolved_content_brief.validate_resolved_content_brief(invalid)
+    assert any(
+        item["field"] == "prayer_category_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+
+
+def test_legacy_brief_construction_uses_safe_creative_defaults():
+    current = _resolve().to_history_dict()
+    for field_name in (
+        "prayer_category_id",
+        "hook_profile_id",
+        "voice_profile_id",
+        "caption_profile_id",
+        "scene_profile_id",
+        "cta_profile_id",
+        "hashtag_profile_id",
+        "creative_policy_version",
+        "prayer_category_resolution_reason",
+    ):
+        current.pop(field_name)
+    legacy = resolved_content_brief.ResolvedContentBrief(**current)
+    assert legacy.prayer_category_id == "general_prayer"
+    assert legacy.voice_profile_id == "natural_conversational"
+    assert legacy.creative_policy_version == "1"
+
+
+def test_history_serialization_includes_creative_resolution_fields():
+    payload = _resolve().to_history_dict()
+    serialized = json.dumps(payload)
+    restored = json.loads(serialized)
+    assert restored["prayer_category_id"]
+    assert restored["hook_profile_id"] == "current_default"
+    assert restored["creative_policy_version"] == "1"
+    assert "default_profiles" not in restored
+
+
+def test_prompt_context_reads_resolved_profiles_without_reselecting_them():
+    brief = replace(
+        _resolve(),
+        hook_profile_id="resolver_owned_hook",
+        caption_profile_id="resolver_owned_caption",
+    )
+    creative_context = prompt_builder.build_creative_brief_data(
+        "morning", resolved_brief=brief
+    )
+    assert creative_context["hook_profile_id"] == "resolver_owned_hook"
+    assert creative_context["caption_profile_id"] == "resolver_owned_caption"
+    assert creative_context["prayer_category_id"] == brief.prayer_category_id
+
+
+def test_current_renderer_facing_fields_remain_unchanged():
+    weekly = _weekly(
+        content_type="prayer_read",
+        video_template="long_prayer",
+        prayer_category_id="morning_prayer",
+    )
+    brief = _resolve(weekly_content=weekly)
+    presentation = resolved_content_brief.content_engine.get_presentation_config(
+        weekly
+    )
+    assert brief.video_template == presentation["video_template"]
+    assert brief.duration_seconds == presentation["duration_seconds"]
+    assert brief.voice_style_profile == "natural_conversational"
+
+
 def test_history_persists_resolved_brief_and_migrates_existing_schema(monkeypatch, tmp_path):
     database_path = tmp_path / "history.db"
     monkeypatch.setattr(config, "DATABASE_PATH", database_path)
@@ -390,6 +689,9 @@ def test_history_persists_resolved_brief_and_migrates_existing_schema(monkeypatc
     assert row[1] == "Feeling overwhelmed at work"
     assert row[2] == brief.creator_search_topic
     assert '"pain_point_id": "overwhelm"' in row[3]
+    persisted_brief = json.loads(row[3])
+    assert persisted_brief["prayer_category_id"] == brief.prayer_category_id
+    assert persisted_brief["creative_policy_version"] == "1"
     assert row[4] == brief.engagement_prompt_type
     assert row[5] == brief.engagement_prompt
     assert row[6] == brief.engagement_selection_reason

@@ -242,6 +242,17 @@ def test_existing_weekly_rhythm_fields_still_work_with_presentation_metadata():
     assert result["objective"] == "Help people start the week trusting God."
 
 
+def test_optional_prayer_category_reaches_canonical_resolution_input():
+    rhythm = _sample_rhythm()
+    rhythm["monday"]["morning"]["prayer_category_id"] = "morning_prayer"
+    result = content_engine.get_todays_content(
+        slot="morning",
+        now=datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc),
+        weekly_rhythm=rhythm,
+    )
+    assert result["prayer_category_id"] == "morning_prayer"
+
+
 def test_existing_production_renderer_defaults_are_unchanged():
     monday = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
     result = content_engine.get_todays_content(

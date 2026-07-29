@@ -10,6 +10,7 @@ import re
 import subprocess
 import wave
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -21,6 +22,7 @@ from moviepy.video.io.ffmpeg_reader import ffmpeg_parse_infos
 
 import config
 import motion_renderer
+import resolved_content_brief
 
 LONG_FORM_OUTPUT_DIR = config.OUTPUT_VIDEOS_LONG_DIR
 LONG_FORM_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -88,6 +90,288 @@ class TextCard:
     start: float
     end: float
     kind: str
+
+
+_CAPTION_CONJUNCTIONS = {"and", "but", "or", "because", "so", "yet"}
+_SCRIPTURE_BOOK_WORDS = {
+    "acts",
+    "chronicles",
+    "corinthians",
+    "daniel",
+    "deuteronomy",
+    "ecclesiastes",
+    "ephesians",
+    "exodus",
+    "ezekiel",
+    "galatians",
+    "genesis",
+    "hebrews",
+    "isaiah",
+    "jeremiah",
+    "job",
+    "john",
+    "joshua",
+    "judges",
+    "kings",
+    "luke",
+    "mark",
+    "matthew",
+    "peter",
+    "philippians",
+    "proverbs",
+    "psalm",
+    "psalms",
+    "revelation",
+    "romans",
+    "samuel",
+    "solomon",
+    "songs",
+    "thessalonians",
+    "timothy",
+}
+_SCRIPTURE_REFERENCE_PATTERN = re.compile(r"^\d+:\d+(?:[-–—]\d+)?(?:,\d+)?$")
+
+
+def _clean_caption_token(token: str) -> str:
+    return token.strip(" \t\r\n\"'“”‘’()[]{}.,;:!?").lower()
+
+
+def _caption_word_count(tokens: Sequence[str]) -> int:
+    return sum(1 for token in tokens if any(character.isalnum() for character in token))
+
+
+def _scripture_protected_boundaries(tokens: Sequence[str]) -> set[int]:
+    protected: set[int] = set()
+    for index, token in enumerate(tokens):
+        reference = token.strip("\"'“”‘’()[]{}.,;!?")
+        if not _SCRIPTURE_REFERENCE_PATTERN.match(reference) or index == 0:
+            continue
+        previous = _clean_caption_token(tokens[index - 1])
+        if previous not in _SCRIPTURE_BOOK_WORDS:
+            continue
+        protected.add(index)
+        if index >= 2 and _clean_caption_token(tokens[index - 2]) in {"1", "2", "3"}:
+            protected.add(index - 1)
+    return protected
+
+
+def _phrase_boundary_score(
+    phrase_tokens: Sequence[str],
+    next_token: Optional[str],
+    *,
+    preferred_minimum_words: int,
+    preferred_maximum_words: int,
+    minimum_words: int,
+    maximum_words: int,
+    soft_maximum_characters: int,
+) -> float:
+    word_count = _caption_word_count(phrase_tokens)
+    if preferred_minimum_words <= word_count <= preferred_maximum_words:
+        score = 0.0
+    elif minimum_words <= word_count <= maximum_words:
+        score = 1.5
+    else:
+        score = 12.0
+
+    phrase = " ".join(phrase_tokens)
+    punctuation_text = phrase.rstrip("\"'”’)]}")
+    if punctuation_text.endswith((".", "!", "?")):
+        score -= 5.0
+    elif punctuation_text.endswith((";", ":", "—", "–")):
+        score -= 3.0
+    elif punctuation_text.endswith(","):
+        score -= 2.5
+
+    if _clean_caption_token(phrase_tokens[-1]) in _CAPTION_CONJUNCTIONS:
+        score += 8.0
+    if next_token and _clean_caption_token(next_token) in _CAPTION_CONJUNCTIONS:
+        score -= 1.0
+    if len(phrase) > soft_maximum_characters:
+        score += (len(phrase) - soft_maximum_characters) * 0.25
+    return score
+
+
+def group_caption_phrases(text: str, profile: Dict[str, Any]) -> List[str]:
+    """Split caption text deterministically while preserving every token."""
+    tokens = [token for token in str(text).split() if token]
+    if not tokens:
+        return []
+
+    minimum_words = max(1, int(profile.get("minimum_words", 3)))
+    preferred_minimum_words = max(
+        minimum_words, int(profile.get("preferred_minimum_words", 4))
+    )
+    preferred_maximum_words = max(
+        preferred_minimum_words, int(profile.get("preferred_maximum_words", 5))
+    )
+    maximum_words = max(
+        preferred_maximum_words, int(profile.get("maximum_words", 6))
+    )
+    soft_maximum_characters = max(
+        1, int(profile.get("soft_maximum_characters", 44))
+    )
+    total_words = _caption_word_count(tokens)
+    if total_words <= 2:
+        return [" ".join(tokens)]
+
+    protected_boundaries = _scripture_protected_boundaries(tokens)
+
+    @lru_cache(maxsize=None)
+    def best_from(start: int) -> Tuple[float, Tuple[str, ...]]:
+        if start >= len(tokens):
+            return 0.0, ()
+
+        best_score = float("inf")
+        best_groups: Tuple[str, ...] = ()
+        for end in range(start + 1, len(tokens) + 1):
+            phrase_tokens = tokens[start:end]
+            word_count = _caption_word_count(phrase_tokens)
+            if word_count > maximum_words:
+                break
+            if end < len(tokens) and end in protected_boundaries:
+                continue
+            if word_count == 0:
+                continue
+
+            remaining_words = _caption_word_count(tokens[end:])
+            boundary_score = _phrase_boundary_score(
+                phrase_tokens,
+                tokens[end] if end < len(tokens) else None,
+                preferred_minimum_words=preferred_minimum_words,
+                preferred_maximum_words=preferred_maximum_words,
+                minimum_words=minimum_words,
+                maximum_words=maximum_words,
+                soft_maximum_characters=soft_maximum_characters,
+            )
+            if 0 < remaining_words < minimum_words:
+                boundary_score += 15.0
+
+            future_score, future_groups = best_from(end)
+            score = boundary_score + future_score
+            if score < best_score:
+                best_score = score
+                best_groups = (" ".join(phrase_tokens),) + future_groups
+        return best_score, best_groups
+
+    _score, groups = best_from(0)
+    return list(groups) if groups else [" ".join(tokens)]
+
+
+def _phrase_timing_weight(phrase: str) -> float:
+    weight = float(max(1, _caption_word_count(phrase.split())))
+    punctuation_text = phrase.rstrip("\"'”’)]}")
+    if punctuation_text.endswith((".", "!", "?")):
+        return weight + 0.60
+    if punctuation_text.endswith((";", ":", "—", "–")):
+        return weight + 0.45
+    if punctuation_text.endswith(","):
+        return weight + 0.30
+    return weight
+
+
+def _bounded_weighted_durations(
+    weights: Sequence[float],
+    total_duration: float,
+    minimum_duration: float,
+    maximum_duration: float,
+) -> List[float]:
+    if not weights:
+        return []
+    if total_duration <= 0:
+        return [0.0 for _weight in weights]
+
+    count = len(weights)
+    lower = minimum_duration if total_duration >= count * minimum_duration else 0.0
+    upper = maximum_duration if total_duration <= count * maximum_duration else total_duration
+    positive_weights = [max(0.001, float(weight)) for weight in weights]
+
+    low = 0.0
+    high = total_duration / min(positive_weights)
+    for _iteration in range(80):
+        scale = (low + high) / 2.0
+        allocated = sum(
+            min(upper, max(lower, scale * weight))
+            for weight in positive_weights
+        )
+        if allocated < total_duration:
+            low = scale
+        else:
+            high = scale
+
+    scale = (low + high) / 2.0
+    durations = [
+        min(upper, max(lower, scale * weight))
+        for weight in positive_weights
+    ]
+    durations[-1] += total_duration - sum(durations)
+    return durations
+
+
+def allocate_phrase_timing(
+    parent_card: TextCard,
+    phrases: Sequence[str],
+    profile: Dict[str, Any],
+) -> List[TextCard]:
+    """Allocate contiguous phrase cards inside one immutable parent window."""
+    normalized_phrases = [str(phrase) for phrase in phrases if str(phrase).strip()]
+    if not normalized_phrases:
+        return []
+
+    total_duration = max(0.0, parent_card.end - parent_card.start)
+    durations = _bounded_weighted_durations(
+        [_phrase_timing_weight(phrase) for phrase in normalized_phrases],
+        total_duration,
+        max(0.0, float(profile.get("minimum_dwell_seconds", 0.85))),
+        max(0.0, float(profile.get("maximum_dwell_seconds", 3.0))),
+    )
+
+    cards: List[TextCard] = []
+    phrase_start = parent_card.start
+    for index, (phrase, phrase_duration) in enumerate(
+        zip(normalized_phrases, durations)
+    ):
+        phrase_end = (
+            parent_card.end
+            if index == len(normalized_phrases) - 1
+            else phrase_start + phrase_duration
+        )
+        cards.append(
+            TextCard(
+                text=phrase,
+                start=phrase_start,
+                end=phrase_end,
+                kind=parent_card.kind,
+            )
+        )
+        phrase_start = phrase_end
+    return cards
+
+
+def apply_caption_profile(
+    cards: Sequence[TextCard], caption_profile: Dict[str, Any]
+) -> List[TextCard]:
+    """Apply one resolved caption profile in a single planning stage."""
+    mode = str(caption_profile.get("mode", "current_default")).strip()
+    if mode in {"", "current_default"}:
+        return cards if isinstance(cards, list) else list(cards)
+    if mode != "rolling_phrase":
+        raise RuntimeError(f"Unsupported caption profile mode: {mode}")
+
+    applicable_kinds = set(caption_profile.get("applicable_kinds", []))
+    transformed: List[TextCard] = []
+    opening_hook_seen = False
+    for card in cards:
+        if card.kind == "opening_hook":
+            if not opening_hook_seen:
+                transformed.append(card)
+                opening_hook_seen = True
+            continue
+        if card.kind not in applicable_kinds:
+            transformed.append(card)
+            continue
+        phrases = group_caption_phrases(card.text, caption_profile)
+        transformed.extend(allocate_phrase_timing(card, phrases, caption_profile))
+    return transformed
 
 
 @dataclass
@@ -730,19 +1014,45 @@ def _get_text_box(
     )[0]
 
 
-def _fit_card_layer(text: str, canvas_size: Tuple[int, int], kind: str) -> Image.Image:
+def _fit_card_text(
+    text: str,
+    canvas_size: Tuple[int, int],
+    kind: str,
+    caption_profile: Optional[Dict[str, Any]] = None,
+) -> Tuple[ImageFont.FreeTypeFont, str]:
     width, _height = canvas_size
     bold_path, _regular_path = motion_renderer._get_fonts()
     max_width = int(width * SAFE_ZONE_MAX_TEXT_WIDTH_FRAC)
     base_size = 64 if kind in {"script_segment", "bridge_line"} else 72
     min_size = 36
-    font, wrapped = motion_renderer._fit_text_to_max_lines(
+    max_lines = 4 if kind == "script_segment" else 2
+    if (
+        caption_profile
+        and caption_profile.get("mode") == "rolling_phrase"
+        and kind in set(caption_profile.get("applicable_kinds", []))
+    ):
+        max_lines = max(1, int(caption_profile.get("maximum_lines", 2)))
+    return motion_renderer._fit_text_to_max_lines(
         text,
         bold_path,
         base_size,
         max_width,
-        max_lines=4 if kind == "script_segment" else 2,
+        max_lines=max_lines,
         min_font_size=min_size,
+    )
+
+
+def _fit_card_layer(
+    text: str,
+    canvas_size: Tuple[int, int],
+    kind: str,
+    caption_profile: Optional[Dict[str, Any]] = None,
+) -> Image.Image:
+    font, wrapped = _fit_card_text(
+        text,
+        canvas_size,
+        kind,
+        caption_profile=caption_profile,
     )
     return motion_renderer._make_text_layer(
         wrapped,
@@ -759,6 +1069,7 @@ def _fit_card_layer(text: str, canvas_size: Tuple[int, int], kind: str) -> Image
 def build_script_layers(
     cards: Sequence[TextCard],
     canvas_size: Tuple[int, int],
+    caption_profile: Optional[Dict[str, Any]] = None,
 ) -> List[OverlayLayer]:
     width, height = canvas_size
     layers: List[OverlayLayer] = []
@@ -767,18 +1078,38 @@ def build_script_layers(
     max_bottom = height - int(height * SAFE_ZONE_BOTTOM_FRAC)
 
     for card in cards:
-        image = _fit_card_layer(card.text, canvas_size, card.kind)
+        image = _fit_card_layer(
+            card.text,
+            canvas_size,
+            card.kind,
+            caption_profile=caption_profile,
+        )
         x = int((width - image.width) / 2)
         y = int(center_y - image.height / 2)
         y = max(max_top, min(y, max_bottom - image.height))
+        rolling_card = (
+            caption_profile
+            and caption_profile.get("mode") == "rolling_phrase"
+            and card.kind in set(caption_profile.get("applicable_kinds", []))
+        )
+        fade_in = (
+            float(caption_profile.get("fade_in_seconds", CAPTION_FADE_IN_SECONDS))
+            if rolling_card
+            else CAPTION_FADE_IN_SECONDS
+        )
+        fade_out = (
+            float(caption_profile.get("fade_out_seconds", CAPTION_FADE_OUT_SECONDS))
+            if rolling_card
+            else CAPTION_FADE_OUT_SECONDS
+        )
         layers.append(
             OverlayLayer(
                 image=image,
                 position=(x, y),
                 start=card.start,
                 end=card.end,
-                fade_in=0.0 if card.kind == "opening_hook" else CAPTION_FADE_IN_SECONDS,
-                fade_out=0.3 if card.kind == "opening_hook" else CAPTION_FADE_OUT_SECONDS,
+                fade_in=0.0 if card.kind == "opening_hook" else fade_in,
+                fade_out=0.3 if card.kind == "opening_hook" else fade_out,
                 label=card.kind,
             )
         )
@@ -991,8 +1322,14 @@ def render_long_form_video(
     narration_audio_path: Optional[Path] = None,
     narration_duration: Optional[float] = None,
     narration_segment_timeline: Optional[Sequence[Dict[str, Any]]] = None,
+    caption_profile_id: str = "current_default",
+    creative_policy_version: Optional[str] = None,
 ) -> Path:
     """Render one finished long-form 9:16 MP4."""
+    caption_profile = resolved_content_brief.get_caption_profile_definition(
+        caption_profile_id,
+        creative_policy_version=creative_policy_version,
+    )
     duration_seconds, hook_window, brand_start = resolve_long_form_duration(
         copy,
         presentation_config,
@@ -1068,7 +1405,12 @@ def render_long_form_video(
             )
             boundary_source = "proportional_fallback"
             detected_boundaries = []
-        script_layers = build_script_layers(script_cards, TARGET_CANVAS_SIZE)
+        script_cards = apply_caption_profile(script_cards, caption_profile)
+        script_layers = build_script_layers(
+            script_cards,
+            TARGET_CANVAS_SIZE,
+            caption_profile=caption_profile,
+        )
         title_layers = build_title_layers(copy, presentation_config, TARGET_CANVAS_SIZE)
         brand_layers = build_final_brand_layers(
             copy,

@@ -2,6 +2,7 @@
   "monday": {
     "morning": {
       "content_type": "prayer_read",
+      "prayer_category_id": "morning_prayer",
       "theme": "strength",
       "emotion": "overwhelmed",
       "hook_style": "recognition",
@@ -21,6 +22,7 @@
     },
     "evening": {
       "content_type": "prayer_read",
+      "prayer_category_id": "night_prayer",
       "theme": "rest",
       "emotion": "exhausted",
       "hook_style": "empathy",
@@ -82,6 +84,7 @@
   "wednesday": {
     "morning": {
       "content_type": "devotional_read",
+      "prayer_category_id": "devotional",
       "theme": "perseverance",
       "emotion": "weary",
       "hook_style": "recognition",
@@ -101,6 +104,7 @@
     },
     "evening": {
       "content_type": "devotional_read",
+      "prayer_category_id": "devotional",
       "theme": "gratitude",
       "emotion": "reflective",
       "hook_style": "empathy",
@@ -162,6 +166,7 @@
   "friday": {
     "morning": {
       "content_type": "hope_encouragement",
+      "prayer_category_id": "hope",
       "theme": "hope",
       "emotion": "tired",
       "hook_style": "recognition",
@@ -181,6 +186,7 @@
     },
     "evening": {
       "content_type": "hope_encouragement",
+      "prayer_category_id": "hope",
       "theme": "release",
       "emotion": "relieved",
       "hook_style": "empathy",
@@ -202,6 +208,7 @@
   "saturday": {
     "morning": {
       "content_type": "gratitude_reflection",
+      "prayer_category_id": "devotional",
       "theme": "peace",
       "emotion": "unsettled",
       "hook_style": "recognition",
@@ -221,6 +228,7 @@
     },
     "evening": {
       "content_type": "gratitude_reflection",
+      "prayer_category_id": "devotional",
       "theme": "journaling",
       "emotion": "reflective",
       "hook_style": "curiosity",
@@ -242,6 +250,7 @@
   "sunday": {
     "morning": {
       "content_type": "night_prayer_or_rest",
+      "prayer_category_id": "morning_prayer",
       "theme": "worship",
       "emotion": "grateful",
       "hook_style": "recognition",
@@ -261,6 +270,7 @@
     },
     "evening": {
       "content_type": "night_prayer_or_rest",
+      "prayer_category_id": "night_prayer",
       "theme": "renewal",
       "emotion": "hopeful",
       "hook_style": "empathy",
