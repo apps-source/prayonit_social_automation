@@ -3,10 +3,15 @@
 All external dependencies are mocked. These tests intentionally cover no
 Apple Photos, Apple Notes, manual package, or Buffer network behavior.
 """
+import json
 from pathlib import Path
 
+import pytest
+
 import config
+import history_store
 import prayonit_social
+import platform_post_preparer
 from engines import content_engine
 
 
@@ -144,9 +149,19 @@ def test_reels_only_queues_facebook_instagram_and_tiktok(monkeypatch, tmp_path):
     assert tiktok["video_url"] == "https://cdn.example/master.mp4"
     assert tiktok["caption"].startswith("Dedicated TikTok caption.")
     assert "Instagram Reel caption" not in tiktok["caption"]
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "published"
+    metadata = json.loads(run["resolved_brief_json"])
+    tiktok_record = metadata["prepared_platform_posts"]["tiktok video"]
+    assert tiktok_record["buffer_post_id"] == "tiktok"
+    assert tiktok_record["publication_status"] == "scheduled"
+    assert tiktok_record["internal_metadata"]["hashtag_profile_id"] == (
+        "current_default"
+    )
+    assert 4 <= len(tiktok_record["hashtags"]) <= 6
 
 
-def test_tiktok_fallback_uses_resolved_brief_and_tiktok_hashtags(monkeypatch, tmp_path):
+def test_tiktok_fallback_uses_resolved_brief_and_profile_hashtags(monkeypatch, tmp_path):
     _wire_run(monkeypatch, tmp_path)
     jobs = []
     monkeypatch.setattr(prayonit_social.buffer_client, "buffer_create_post", lambda **kwargs: jobs.append(kwargs) or {"post": {"id": "ok"}})
@@ -154,7 +169,8 @@ def test_tiktok_fallback_uses_resolved_brief_and_tiktok_hashtags(monkeypatch, tm
     assert prayonit_social.cmd_run("morning") == 0
     caption = next(job["caption"] for job in jobs if job["service"] == "tiktok")
     assert "Your workday feels heavy." in caption
-    assert "#PrayerTok" in caption
+    assert "#Prayonit" in caption
+    assert 4 <= len([token for token in caption.split() if token.startswith("#")]) <= 6
     assert "Link in bio" not in caption
 
 
@@ -167,6 +183,39 @@ def test_preview_shows_tiktok_payload_without_upload_or_buffer(monkeypatch, tmp_
     output = capsys.readouterr().out
     assert "SOCIAL_OUTPUT_MODE: reels_only" in output
     assert "TikTok scheduling payload:" in output
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "dry_run"
+
+
+def test_failed_gemini_generation_cannot_upload_or_publish(monkeypatch, tmp_path):
+    _wire_run(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        prayonit_social.prompt_builder,
+        "generate_ad_copy",
+        lambda **_: (_ for _ in ()).throw(
+            RuntimeError("503 Gemini unavailable after bounded retries")
+        ),
+    )
+    monkeypatch.setattr(
+        prayonit_social.image_renderer,
+        "upload_generated_video",
+        lambda *_: (_ for _ in ()).throw(
+            AssertionError("generation failure must not upload")
+        ),
+    )
+    monkeypatch.setattr(
+        prayonit_social.buffer_client,
+        "buffer_create_post",
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("generation failure must not publish")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="bounded retries"):
+        prayonit_social.cmd_run("morning")
+
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "failed"
 
 
 def test_normal_runs_never_call_manual_handoff_or_apple_automation(monkeypatch, tmp_path):
@@ -193,6 +242,63 @@ def test_tiktok_failure_does_not_prevent_other_platforms(monkeypatch, tmp_path):
     monkeypatch.setattr(prayonit_social.buffer_client, "buffer_create_post", publish)
     assert prayonit_social.cmd_run("morning") == 1
     assert calls == ["facebook", "instagram", "tiktok"]
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "partially_published"
+    tiktok = history_store.get_platform_delivery_state(
+        run_id=run["run_id"],
+        platform="tiktok",
+        post_type="video",
+    )
+    assert tiktok["buffer_status"] == "failed"
+    assert "TikTok unavailable" in tiktok["error_message"]
+
+
+def test_all_platform_failures_mark_parent_run_failed(monkeypatch, tmp_path):
+    _wire_run(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        prayonit_social.buffer_client,
+        "buffer_create_post",
+        lambda **kwargs: (_ for _ in ()).throw(
+            RuntimeError(f"{kwargs['service']} unavailable")
+        ),
+    )
+
+    assert prayonit_social.cmd_run("morning") == 1
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "failed"
+
+
+def test_platform_preparation_failure_does_not_destroy_other_posts(
+    monkeypatch,
+    tmp_path,
+):
+    _wire_run(monkeypatch, tmp_path)
+    original = platform_post_preparer.prepare_platform_post
+
+    def prepare(**kwargs):
+        if kwargs["platform"] == "tiktok":
+            raise platform_post_preparer.PlatformPostPreparationError(
+                "TikTok fixture invalid"
+            )
+        return original(**kwargs)
+
+    monkeypatch.setattr(
+        prayonit_social.platform_post_preparer,
+        "prepare_platform_post",
+        prepare,
+    )
+    calls = []
+    monkeypatch.setattr(
+        prayonit_social.buffer_client,
+        "buffer_create_post",
+        lambda **kwargs: calls.append(kwargs["service"])
+        or {"post": {"id": kwargs["service"]}},
+    )
+
+    assert prayonit_social.cmd_run("morning") == 1
+    assert calls == ["facebook", "instagram"]
+    run = history_store.get_recent_campaign_history(days=1)[0]
+    assert run["status"] == "partially_published"
 
 
 def test_repeated_run_id_skips_already_scheduled_platform_jobs(monkeypatch, tmp_path):
@@ -208,6 +314,55 @@ def test_repeated_run_id_skips_already_scheduled_platform_jobs(monkeypatch, tmp_
     assert prayonit_social.cmd_run("morning") == 0
     assert prayonit_social.cmd_run("morning") == 0
     assert calls == ["facebook", "instagram", "tiktok"]
+    assert history_store.get_successful_platform_delivery_state(
+        run_id="fixed-run-id",
+        platform="facebook",
+        post_type="reel",
+    )["buffer_post_id"] == "facebook"
+    assert history_store.get_successful_platform_delivery_state(
+        run_id="fixed-run-id",
+        platform="instagram",
+        post_type="reel",
+    )["buffer_post_id"] == "instagram"
+
+
+def test_retry_only_resubmits_failed_platform_and_preserves_success_ids(
+    monkeypatch,
+    tmp_path,
+):
+    _wire_run(monkeypatch, tmp_path)
+    monkeypatch.setattr(prayonit_social.uuid, "uuid4", lambda: "retry-run-id")
+    calls = []
+    tiktok_attempts = {"count": 0}
+
+    def publish(**kwargs):
+        service = kwargs["service"]
+        calls.append(service)
+        if service == "tiktok":
+            tiktok_attempts["count"] += 1
+            if tiktok_attempts["count"] == 1:
+                raise RuntimeError("temporary TikTok failure")
+        return {"post": {"id": f"{service}-original"}}
+
+    monkeypatch.setattr(
+        prayonit_social.buffer_client,
+        "buffer_create_post",
+        publish,
+    )
+
+    assert prayonit_social.cmd_run("morning") == 1
+    assert prayonit_social.cmd_run("morning") == 0
+    assert calls == ["facebook", "instagram", "tiktok", "tiktok"]
+    assert history_store.get_successful_platform_delivery_state(
+        run_id="retry-run-id",
+        platform="facebook",
+        post_type="reel",
+    )["buffer_post_id"] == "facebook-original"
+    assert history_store.get_successful_platform_delivery_state(
+        run_id="retry-run-id",
+        platform="instagram",
+        post_type="reel",
+    )["buffer_post_id"] == "instagram-original"
 
 
 def test_explicit_environment_output_mode_overrides_module_default(monkeypatch):

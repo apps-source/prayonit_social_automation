@@ -2,6 +2,7 @@
 import json
 import random
 import re
+import time
 from typing import Any, Dict, Optional
 
 import creative_engine_v3
@@ -9,10 +10,12 @@ from google import genai
 from google.genai import types
 
 import config
+import resolved_content_brief
 from engines import content_engine
 
 _gemini_clients_by_key: Dict[str, genai.Client] = {}
 _TEMPORARY_GEMINI_ERROR_CODES = ("429", "500", "502", "503", "504")
+_CONTENT_503_RETRY_DELAYS_SECONDS = (2.0, 5.0)
 
 
 def _get_gemini_client(api_key: Optional[str] = None) -> genai.Client:
@@ -24,9 +27,16 @@ def _get_gemini_client(api_key: Optional[str] = None) -> genai.Client:
     return client
 
 
+def _gemini_error_status(exc: Exception) -> Optional[str]:
+    code = getattr(exc, "code", None)
+    if code is not None and str(code) in _TEMPORARY_GEMINI_ERROR_CODES:
+        return str(code)
+    match = re.search(r"\b(429|500|502|503|504)\b", str(exc))
+    return match.group(1) if match else None
+
+
 def _is_temporary_gemini_error(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return any(code in message for code in _TEMPORARY_GEMINI_ERROR_CODES)
+    return _gemini_error_status(exc) is not None
 
 
 def _get_configured_content_models() -> list[str]:
@@ -117,7 +127,9 @@ Time-of-day guidance: this ad will publish this morning, around 8:00 AM.
 """
 
 
-def build_weekly_rhythm_preamble(slot: str) -> str:
+def build_weekly_rhythm_preamble(
+    slot: str, resolved_brief: Optional[Any] = None
+) -> str:
     """Build the "Today's Schedule" block from the Weekly Rhythm content
     engine and log the resolved theme for verification.
 
@@ -126,17 +138,24 @@ def build_weekly_rhythm_preamble(slot: str) -> str:
     rhythm config cannot be loaded for any reason, an empty string is
     returned so prompt generation continues to work exactly as before.
     """
-    try:
-        todays_content = content_engine.get_todays_content(slot=slot)
-    except Exception as exc:  # pragma: no cover - defensive fallback only
-        print("Weekly Theme: unavailable ({0})".format(exc))
-        return ""
+    if resolved_brief is not None:
+        content_type = resolved_brief.content_type
+        theme = resolved_brief.weekly_theme
+        emotion = resolved_brief.pain_point_label
+        hook_style = resolved_brief.hook_style_label or ""
+        objective = resolved_brief.objective
+    else:
+        try:
+            todays_content = content_engine.get_todays_content(slot=slot)
+        except Exception as exc:  # pragma: no cover - defensive fallback only
+            print("Weekly Theme: unavailable ({0})".format(exc))
+            return ""
 
-    content_type = todays_content.get("content_type", "")
-    theme = todays_content.get("theme", "")
-    emotion = todays_content.get("emotion", "")
-    hook_style = todays_content.get("hook_style", "")
-    objective = todays_content.get("objective", "")
+        content_type = todays_content.get("content_type", "")
+        theme = todays_content.get("theme", "")
+        emotion = todays_content.get("emotion", "")
+        hook_style = todays_content.get("hook_style", "")
+        objective = todays_content.get("objective", "")
 
     print("Weekly Theme:")
     print(content_type.replace("_", " ").title())
@@ -415,6 +434,9 @@ def build_creative_brief_data(
             "prayer_category_id": resolved_brief.prayer_category_id,
             "hook_profile_id": resolved_brief.hook_profile_id,
             "voice_profile_id": resolved_brief.voice_profile_id,
+            "body_profile_id": getattr(
+                resolved_brief, "body_profile_id", "current_default"
+            ),
             "caption_profile_id": resolved_brief.caption_profile_id,
             "scene_profile_id": resolved_brief.scene_profile_id,
             "cta_profile_id": resolved_brief.cta_profile_id,
@@ -588,6 +610,297 @@ def build_creative_brief_preamble(slot: str, resolved_brief: Optional[Any] = Non
     return "\n".join(lines)
 
 
+def _profile_list(values: Any) -> str:
+    normalized = [str(value).strip() for value in (values or []) if str(value).strip()]
+    return ", ".join(normalized) if normalized else "none"
+
+
+def build_resolved_profile_guidance(resolved_brief: Optional[Any]) -> str:
+    """Render resolver-owned writing guidance without selecting any profile."""
+    if resolved_brief is None:
+        return ""
+
+    hook_profile = resolved_content_brief.get_hook_profile_definition(
+        resolved_brief.hook_profile_id,
+        creative_policy_version=resolved_brief.creative_policy_version,
+    )
+    writing_profile = resolved_content_brief.get_writing_profile_definition(
+        resolved_brief.voice_profile_id,
+        creative_policy_version=resolved_brief.creative_policy_version,
+    )
+    body_profile = resolved_content_brief.get_body_profile_definition(
+        getattr(resolved_brief, "body_profile_id", "current_default"),
+        creative_policy_version=resolved_brief.creative_policy_version,
+    )
+    body_guidance_enabled = body_profile.get("inject_guidance", True)
+    if (
+        not hook_profile.get("inject_guidance", True)
+        and not writing_profile.get("inject_guidance", True)
+        and not body_guidance_enabled
+    ):
+        return ""
+
+    word_range = hook_profile.get("preferred_word_range") or []
+    preferred_words = (
+        f"{word_range[0]} to {word_range[1]} words"
+        if len(word_range) == 2
+        else "preserve the existing hook length guidance"
+    )
+    reading_seconds = hook_profile.get("preferred_reading_seconds")
+    preferred_reading = (
+        f"approximately {float(reading_seconds):g} seconds"
+        if isinstance(reading_seconds, (int, float))
+        else "preserve the existing reading-time guidance"
+    )
+
+    profile_scope = (
+        "Apply the Hook Profile only to opening_hook. Apply the Writing Profile "
+        "to how opening_hook, bridge_line, script_segments, and closing_line sound. "
+        "Apply the Body Profile to what bridge_line, script_segments, reassurance, "
+        "and closing_line emphasize. Do not use these profiles to change platform "
+        "captions, CTA language, hashtags, engagement prompts, publishing fields, "
+        "or output schema."
+        if body_guidance_enabled
+        else (
+            "Apply the Hook Profile only to opening_hook. Apply the\n"
+            "Writing Profile only to opening_hook, bridge_line, script_segments, and\n"
+            "closing_line. Do not use either profile to change platform captions, CTA\n"
+            "language, engagement prompts, publishing fields, or output schema."
+        )
+    )
+    body_guidance = ""
+    if body_guidance_enabled:
+        body_guidance = """
+
+Resolved Body Profile:
+- ID: {body_id}
+- Recognition focus: {recognition_focus}
+- Petition focus: {petition_focus}
+- Reassurance focus: {reassurance_focus}
+- Emotional movement: {emotional_movement}
+- Closing focus: {closing_focus}
+- Avoid: {body_avoid}
+- Use the existing universal emotional arc flexibly; this profile refines its
+  emphasis rather than replacing it.
+- Preserve natural variety. Do not turn these stages into a rigid or repeated
+  prayer template.
+""".format(
+            body_id=body_profile["id"],
+            recognition_focus=_profile_list(body_profile.get("recognition_focus")),
+            petition_focus=_profile_list(body_profile.get("petition_focus")),
+            reassurance_focus=_profile_list(body_profile.get("reassurance_focus")),
+            emotional_movement=_profile_list(body_profile.get("emotional_movement")),
+            closing_focus=_profile_list(body_profile.get("closing_focus")),
+            body_avoid=_profile_list(body_profile.get("avoid")),
+        )
+
+    return """
+Resolved Creative Profile Guidance
+
+These profile IDs were already selected by ResolvedContentBrief. Consume
+their guidance exactly as written. Do not choose, replace, or infer a
+different profile. {profile_scope}
+
+Resolved Hook Profile:
+- ID: {hook_id}
+- Emotional tone: {hook_tone}
+- Opening style: {opening_style}
+- Preferred length: {preferred_words}
+- Preferred reading time: {preferred_reading}
+- Behavioral guidance: {hook_guidance}
+- Preferred verbs: {preferred_verbs}
+- Avoid: {hook_avoid}
+- Curiosity level: {curiosity_level}
+- Urgency level: {urgency_level}
+- First person allowed: {allow_first_person}
+- Rhetorical questions: {rhetorical_questions}
+
+Resolved Writing Profile:
+- ID: {writing_id}
+- Purpose: content writing only; never use this profile to control TTS
+- Sentence rhythm: {sentence_rhythm}
+- Diction: {diction}
+- Emotional tone: {writing_tone}
+- Transitions: {transitions}
+- Behavioral guidance: {writing_guidance}
+- Avoid: {writing_avoid}
+{body_guidance}""".format(
+        profile_scope=profile_scope,
+        hook_id=hook_profile["id"],
+        hook_tone=hook_profile.get("emotional_tone", "preserve current behavior"),
+        opening_style=hook_profile.get("opening_style", "preserve current behavior"),
+        preferred_words=preferred_words,
+        preferred_reading=preferred_reading,
+        hook_guidance=hook_profile.get("writing_guidance", "Preserve current hook behavior."),
+        preferred_verbs=_profile_list(hook_profile.get("preferred_verbs")),
+        hook_avoid=_profile_list(hook_profile.get("avoid")),
+        curiosity_level=hook_profile.get("curiosity_level", "preserve current behavior"),
+        urgency_level=hook_profile.get("urgency_level", "preserve current behavior"),
+        allow_first_person=str(hook_profile.get("allow_first_person", "preserve current behavior")).lower(),
+        rhetorical_questions=hook_profile.get("rhetorical_questions", "preserve current behavior"),
+        writing_id=writing_profile["id"],
+        sentence_rhythm=writing_profile.get("sentence_rhythm", "preserve current behavior"),
+        diction=writing_profile.get("diction", "preserve current behavior"),
+        writing_tone=writing_profile.get("emotional_tone", "preserve current behavior"),
+        transitions=writing_profile.get("transitions", "preserve current behavior"),
+        writing_guidance=writing_profile.get(
+            "writing_guidance", "Preserve current natural conversational writing behavior."
+        ),
+        writing_avoid=_profile_list(writing_profile.get("avoid")),
+        body_guidance=body_guidance,
+    )
+
+
+def validate_opening_hook(
+    opening_hook: str,
+    hook_profile: Dict[str, Any],
+) -> list[str]:
+    """Return advisory hook warnings without rewriting or rejecting copy."""
+    text = str(opening_hook or "").strip()
+    if not text:
+        return ["hook_blank"]
+
+    warnings = []
+    words = text.split()
+    word_count = len(words)
+    preferred_range = hook_profile.get("preferred_word_range") or []
+    if len(preferred_range) == 2:
+        minimum_words, maximum_words = (int(value) for value in preferred_range)
+        if word_count < minimum_words:
+            warnings.append("hook_below_preferred_word_range")
+        if word_count > maximum_words:
+            warnings.append("hook_exceeds_preferred_word_range")
+        if word_count > max(10, maximum_words + 3):
+            warnings.append("hook_excessively_long")
+
+    if text[-1] not in ".?!…":
+        warnings.append("hook_incomplete_thought")
+
+    preferred_seconds = hook_profile.get("preferred_reading_seconds")
+    if isinstance(preferred_seconds, (int, float)):
+        estimated_seconds = word_count / 3.0
+        if estimated_seconds > float(preferred_seconds) + 0.1:
+            warnings.append("hook_exceeds_preferred_reading_duration")
+    return warnings
+
+
+def log_resolved_hook_warnings(
+    ad_copy: Dict[str, Any],
+    resolved_brief: Optional[Any],
+) -> list[str]:
+    if resolved_brief is None or resolved_brief.long_form_type == "none":
+        return []
+    profile = resolved_content_brief.get_hook_profile_definition(
+        resolved_brief.hook_profile_id,
+        creative_policy_version=resolved_brief.creative_policy_version,
+    )
+    warnings = validate_opening_hook(ad_copy.get("opening_hook", ""), profile)
+    for warning in warnings:
+        print(f"Opening hook validation warning: {warning}")
+    return warnings
+
+
+def validate_body_profile_output(
+    ad_copy: Dict[str, Any],
+    resolved_brief: Optional[Any],
+) -> list[str]:
+    """Return advisory category-body diagnostics without rewriting copy."""
+    if resolved_brief is None or resolved_brief.long_form_type == "none":
+        return []
+
+    profile = resolved_content_brief.get_body_profile_definition(
+        getattr(resolved_brief, "body_profile_id", "current_default"),
+        creative_policy_version=resolved_brief.creative_policy_version,
+    )
+    if not profile.get("inject_guidance", True):
+        return []
+
+    body_units = [str(ad_copy.get("bridge_line", "")).strip()]
+    raw_segments = ad_copy.get("script_segments", [])
+    if isinstance(raw_segments, list):
+        body_units.extend(str(segment).strip() for segment in raw_segments)
+    body_units.append(str(ad_copy.get("closing_line", "")).strip())
+    body_units = [unit for unit in body_units if unit]
+    if not body_units:
+        return ["body_blank"]
+
+    body_text = "\n".join(body_units)
+    normalized_body = " ".join(
+        re.sub(r"[^a-z0-9]+", " ", body_text.lower()).split()
+    )
+    warnings: list[str] = []
+
+    diagnostic_terms = [
+        " ".join(re.sub(r"[^a-z0-9]+", " ", str(term).lower()).split())
+        for term in profile.get("diagnostic_terms", [])
+    ]
+    if diagnostic_terms and not any(term in normalized_body for term in diagnostic_terms):
+        warnings.append("body_may_be_overly_generic_for_category")
+
+    normalized_hook = " ".join(
+        re.sub(
+            r"[^a-z0-9]+",
+            " ",
+            str(ad_copy.get("opening_hook", "")).lower(),
+        ).split()
+    )
+    if normalized_hook and normalized_hook in normalized_body:
+        warnings.append("body_duplicates_opening_hook")
+
+    normalized_sentences = [
+        " ".join(re.sub(r"[^a-z0-9]+", " ", sentence.lower()).split())
+        for sentence in re.split(r"(?<=[.!?])\s+", body_text)
+    ]
+    substantial_sentences = [
+        sentence for sentence in normalized_sentences if len(sentence.split()) >= 4
+    ]
+    if len(substantial_sentences) != len(set(substantial_sentences)):
+        warnings.append("body_repeats_petition")
+
+    unsupported_promise_patterns = (
+        r"\bguaranteed\b",
+        r"\bimmediate(?:ly)? relief\b",
+        r"\bnothing bad will happen\b",
+        r"\byou will be healed\b",
+        r"\byour anxiety will (?:leave|disappear|be gone)\b",
+    )
+    if any(re.search(pattern, normalized_body) for pattern in unsupported_promise_patterns):
+        warnings.append("body_contains_unsupported_promise")
+
+    avoided_phrases = [
+        " ".join(re.sub(r"[^a-z0-9]+", " ", str(term).lower()).split())
+        for term in profile.get("avoid", [])
+    ]
+    if any(term and term in normalized_body for term in avoided_phrases):
+        warnings.append("body_contains_avoided_category_language")
+
+    inappropriate_time_terms = [
+        " ".join(re.sub(r"[^a-z0-9]+", " ", str(term).lower()).split())
+        for term in profile.get("inappropriate_time_terms", [])
+    ]
+    if any(term and term in normalized_body for term in inappropriate_time_terms):
+        warnings.append("body_contains_inappropriate_time_language")
+
+    if (
+        resolved_brief.prayer_category_id == "bible_verse"
+        and not any(term in normalized_body for term in diagnostic_terms)
+        and not re.search(r"\b(?:[1-3]\s+)?[a-z]+\s+\d+(?::\d+)?\b", body_text.lower())
+    ):
+        warnings.append("body_scripture_relevance_unclear")
+
+    return warnings
+
+
+def log_body_profile_warnings(
+    ad_copy: Dict[str, Any],
+    resolved_brief: Optional[Any],
+) -> list[str]:
+    warnings = validate_body_profile_output(ad_copy, resolved_brief)
+    for warning in warnings:
+        print(f"Prayer body validation warning: {warning}")
+    return warnings
+
+
 def build_prompt(
     *,
     post_type: str,
@@ -616,14 +929,17 @@ def build_prompt(
     seasonal_block = f"\nSeasonal context to weave in naturally, if relevant: {seasonal_context}\n" if seasonal_context else ""
 
     brand_preamble = build_brand_brain_preamble(config.BRAND_RULES)
-    weekly_rhythm_preamble = build_weekly_rhythm_preamble(slot)
+    weekly_rhythm_preamble = build_weekly_rhythm_preamble(
+        slot, resolved_brief=resolved_brief
+    )
     creative_brief_preamble = build_creative_brief_preamble(slot, resolved_brief=resolved_brief)
+    profile_guidance = build_resolved_profile_guidance(resolved_brief)
 
     # ---- Emotional flow: Life Moment -> Recognition Hook -> Comfort ->
     # Hope -> Invitation -> Brand Rules -> App Features -> Constraints ----
     return f"""
 {creative_brief_preamble}
-{weekly_rhythm_preamble}
+{weekly_rhythm_preamble}{profile_guidance}
 The Life Moment, Hook Style, Objective, Tone, and Emotional Goal above are
 the single source of truth for this ad's emotional content. Do not invent
 a different pain point, hook, or angle -- build directly on what is given
@@ -1158,6 +1474,7 @@ def parse_ad_copy_response(
     raw: str,
     *,
     slot: str,
+    resolved_brief: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Parse Gemini JSON and normalize optional long-form fields."""
     try:
@@ -1178,8 +1495,16 @@ def parse_ad_copy_response(
     if "threads_caption" in data and str(data.get("threads_caption", "")).strip():
         ad_copy["threads_caption"] = str(data["threads_caption"]).strip()
 
-    todays_content = content_engine.get_todays_content(slot=slot)
-    presentation = content_engine.get_presentation_config(todays_content)
+    if resolved_brief is not None:
+        todays_content = {"content_type": resolved_brief.content_type}
+        presentation = {
+            "video_template": resolved_brief.video_template,
+            "duration_seconds": resolved_brief.duration_seconds,
+            "engagement_prompt_enabled": bool(resolved_brief.engagement_prompt),
+        }
+    else:
+        todays_content = content_engine.get_todays_content(slot=slot)
+        presentation = content_engine.get_presentation_config(todays_content)
     ad_copy.update(
         normalize_long_form_fields(
             data,
@@ -1238,32 +1563,49 @@ def generate_ad_copy(
             f"using {key_label} key"
         )
         client = _get_gemini_client(api_key)
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=1.0,
-                    response_mime_type="application/json",
-                ),
-            )
+        model_call_limit = len(_CONTENT_503_RETRY_DELAYS_SECONDS) + 1
+        for model_call in range(1, model_call_limit + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=1.0,
+                        response_mime_type="application/json",
+                    ),
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                status = _gemini_error_status(exc)
+                if status is None:
+                    raise
+                print(
+                    f"Gemini content model temporary failure: {model_name} — {status}"
+                )
+                if status == "503" and model_call < model_call_limit:
+                    delay = _CONTENT_503_RETRY_DELAYS_SECONDS[model_call - 1]
+                    print(
+                        f"Retrying Gemini content model {model_name} after "
+                        f"{delay:g}s (attempt {model_call + 1}/{model_call_limit})"
+                    )
+                    time.sleep(delay)
+                    continue
+                if attempt >= max_attempts:
+                    raise
+                print(f"Switching Gemini content model to: {attempts[attempt][0]}")
+                break
+        if response is not None:
             break
-        except Exception as exc:  # noqa: BLE001
-            if not _is_temporary_gemini_error(exc):
-                raise
-            if attempt >= max_attempts:
-                print(f"Gemini content model temporary failure: {model_name} — {exc}")
-                raise
-            status_match = re.search(r"\b(429|500|502|503|504)\b", str(exc))
-            status = status_match.group(1) if status_match else str(exc)
-            print(f"Gemini content model temporary failure: {model_name} — {status}")
-            print(f"Switching Gemini content model to: {attempts[attempt][0]}")
 
     if response is None:  # pragma: no cover - defensive
         raise RuntimeError("Gemini response was unavailable after content-model failover.")
 
     raw = (response.text or "").strip()
-    ad_copy = parse_ad_copy_response(raw, slot=slot)
+    ad_copy = parse_ad_copy_response(
+        raw, slot=slot, resolved_brief=resolved_brief
+    )
+    log_resolved_hook_warnings(ad_copy, resolved_brief)
+    log_body_profile_warnings(ad_copy, resolved_brief)
     return enforce_resolved_engagement_line(
         apply_brand_enforcement(ad_copy, config.BRAND_RULES), resolved_brief
     )
@@ -1372,6 +1714,7 @@ def generate_local_ad_copy(
             }
         )
     ad_copy.update(long_form)
+    log_resolved_hook_warnings(ad_copy, resolved_brief)
     return enforce_resolved_engagement_line(
         apply_brand_enforcement(ad_copy, config.BRAND_RULES), resolved_brief
     )

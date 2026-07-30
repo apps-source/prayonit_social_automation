@@ -44,7 +44,7 @@ MAX_TOTAL_DURATION = 35.0
 PREFERRED_MAX_TOTAL_DURATION = 45.0
 MIN_CARD_DURATION = 2.8
 MAX_CARD_DURATION = 7.5
-CROSSFADE_SECONDS = 0.6
+CROSSFADE_SECONDS = config.LONG_FORM_CROSSFADE_SECONDS
 TEXT_BACKDROP_FILL = (0, 0, 0, 110)
 TEXT_BACKDROP_PADDING = 26
 TEXT_BACKDROP_RADIUS = 26
@@ -347,6 +347,43 @@ def allocate_phrase_timing(
     return cards
 
 
+def apply_rolling_timing_offsets(
+    cards: Sequence[TextCard], caption_profile: Dict[str, Any]
+) -> List[TextCard]:
+    """Shift rolling body cards later while keeping every card non-overlapping."""
+    start_delay = max(
+        0.0, float(caption_profile.get("start_delay_seconds", 0.0))
+    )
+    end_extension = max(
+        0.0, float(caption_profile.get("end_extension_seconds", 0.0))
+    )
+    if start_delay == 0.0 and end_extension == 0.0:
+        return cards if isinstance(cards, list) else list(cards)
+
+    applicable_kinds = set(caption_profile.get("applicable_kinds", []))
+    adjusted: List[TextCard] = []
+    for index, card in enumerate(cards):
+        if card.kind not in applicable_kinds:
+            adjusted.append(card)
+            continue
+
+        start = min(card.end, card.start + start_delay)
+        end = card.end + end_extension
+        if index + 1 < len(cards):
+            next_card = cards[index + 1]
+            next_start = next_card.start
+            if next_card.kind in applicable_kinds:
+                next_start += start_delay
+            end = min(end, next_start)
+        else:
+            # The final caption must not intrude into the brand frame.
+            end = min(end, card.end)
+        adjusted.append(
+            TextCard(card.text, start, max(start, end), card.kind)
+        )
+    return adjusted
+
+
 def apply_caption_profile(
     cards: Sequence[TextCard], caption_profile: Dict[str, Any]
 ) -> List[TextCard]:
@@ -371,7 +408,7 @@ def apply_caption_profile(
             continue
         phrases = group_caption_phrases(card.text, caption_profile)
         transformed.extend(allocate_phrase_timing(card, phrases, caption_profile))
-    return transformed
+    return apply_rolling_timing_offsets(transformed, caption_profile)
 
 
 @dataclass

@@ -142,6 +142,157 @@ def test_default_style_fallback_is_natural_conversational():
     assert voice_provider.select_style_profile({"long_form_type": "unknown"}) == "natural_conversational"
 
 
+def test_all_tts_delivery_profiles_are_available():
+    assert {
+        "morning_hopeful",
+        "evening_reflective",
+        "anxiety_calming",
+        "protection_confident",
+        "devotional_measured",
+        "current_default",
+    } <= voice_provider.VALID_TTS_DELIVERY_PROFILES
+
+
+def test_evening_devotional_resolves_reflective_delivery():
+    profile, reason = voice_provider.select_tts_delivery_profile_with_reason(
+        _long_copy("devotional"),
+        {
+            "slot": "evening",
+            "content_type": "devotional_read",
+            "prayer_category_id": "devotional",
+        },
+    )
+    assert profile == "evening_reflective"
+    assert reason == "evening devotional content"
+
+
+def test_morning_devotional_does_not_receive_evening_delivery():
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            _long_copy("devotional"),
+            {
+                "slot": "morning",
+                "content_type": "devotional_read",
+                "prayer_category_id": "devotional",
+            },
+        )
+        == "devotional_measured"
+    )
+
+
+def test_anxiety_resolves_calming_delivery():
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            _long_copy("prayer"),
+            {
+                "slot": "evening",
+                "content_type": "prayer_read",
+                "prayer_category_id": "anxiety",
+            },
+        )
+        == "anxiety_calming"
+    )
+
+
+def test_protection_resolves_confident_controlled_delivery():
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            _long_copy("prayer"),
+            {
+                "slot": "evening",
+                "content_type": "prayer_read",
+                "prayer_category_id": "protection",
+            },
+        )
+        == "protection_confident"
+    )
+
+
+def test_explicit_tts_delivery_override_has_highest_priority(monkeypatch):
+    monkeypatch.setattr(
+        voice_provider.config,
+        "TTS_DELIVERY_PROFILE_OVERRIDE",
+        "protection_confident",
+    )
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            _long_copy("devotional"),
+            {
+                "slot": "evening",
+                "content_type": "devotional_read",
+                "prayer_category_id": "devotional",
+            },
+        )
+        == "protection_confident"
+    )
+
+
+def test_tts_delivery_resolution_does_not_use_or_mutate_writing_profile():
+    context = {
+        "slot": "evening",
+        "content_type": "devotional_read",
+        "prayer_category_id": "devotional",
+        "voice_profile_id": "natural_conversational",
+    }
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            _long_copy("devotional"),
+            context,
+        )
+        == "evening_reflective"
+    )
+    assert context["voice_profile_id"] == "natural_conversational"
+
+
+def test_default_tts_delivery_preserves_existing_style_and_temperature(monkeypatch):
+    monkeypatch.setattr(voice_provider.config, "VOICE_TEMPERATURE", 1.0)
+    profile = voice_provider.select_tts_delivery_profile(
+        _long_copy("prayer"),
+        {
+            "slot": "evening",
+            "content_type": "prayer_read",
+            "prayer_category_id": "general_prayer",
+        },
+    )
+    assert profile == "current_default"
+    assert (
+        voice_provider.TTS_DELIVERY_PROFILES[profile]["scene"]
+        == voice_provider.NATURAL_CONVERSATIONAL_STYLE_INSTRUCTION
+    )
+    assert voice_provider._resolve_voice_temperature(profile) == 1.0
+
+
+def test_evening_reflective_uses_conservative_temperature_and_guidance():
+    profile = "evening_reflective"
+    prompt = voice_provider.build_tts_prompt(
+        voice_provider.build_narration_text(_long_copy("devotional")),
+        profile,
+        _long_copy("devotional"),
+    )
+    assert voice_provider._resolve_voice_temperature(profile) == 0.8
+    assert "warm, calm, reflective tone" in prompt
+    assert "gentle pace with measured pauses" in prompt
+    assert "Avoid upbeat, promotional, urgent" in prompt
+
+
+def test_evening_delivery_keeps_orus_voice(monkeypatch):
+    monkeypatch.setattr(voice_provider.config, "VOICE_NAME", "")
+    monkeypatch.setattr(voice_provider.config, "VOICE_NAME_DEVOTIONAL", "Orus")
+    copy = _long_copy("devotional")
+    assert (
+        voice_provider.select_tts_delivery_profile(
+            copy,
+            {
+                "slot": "evening",
+                "content_type": "devotional_read",
+                "prayer_category_id": "devotional",
+            },
+        )
+        == "evening_reflective"
+    )
+    assert voice_provider.select_default_voice(copy) == "Orus"
+
+
 def test_charon_remains_available_through_override(monkeypatch):
     monkeypatch.setattr(voice_provider.config, "VOICE_NAME", "")
     monkeypatch.setattr(voice_provider.config, "VOICE_NAME_PRAYER", "Charon")
@@ -475,6 +626,42 @@ def test_generate_with_gemini_uses_primary_key_and_temperature(monkeypatch, tmp_
     assert "God sees your burden." in kwargs["contents"]
     assert "Come pray with me." not in kwargs["contents"]
     assert "Read every sentence in the Transcript exactly once, in order." in kwargs["contents"]
+
+
+def test_generate_with_gemini_applies_evening_delivery_context(
+    monkeypatch, tmp_path, capsys
+):
+    fake_response = MagicMock()
+    fake_response.candidates = [MagicMock()]
+    fake_response.candidates[0].content.parts = [MagicMock()]
+    fake_response.candidates[0].content.parts[0].inline_data.data = (
+        b"\x00\x00" * 24000
+    )
+    fake_client = MagicMock()
+    fake_client.models.generate_content.return_value = fake_response
+    monkeypatch.setattr(voice_provider, "_get_gemini_client", lambda: fake_client)
+
+    copy = _long_copy("devotional")
+    voice_provider._generate_with_gemini(
+        voice_provider.build_narration_text(copy),
+        "Orus",
+        voice_provider.DEVOTIONAL_STYLE_INSTRUCTION,
+        tmp_path / "voice.wav",
+        copy=copy,
+        model_name="gemini-3.1-flash-tts-preview",
+        delivery_context={
+            "slot": "evening",
+            "content_type": "devotional_read",
+            "prayer_category_id": "devotional",
+        },
+    )
+
+    kwargs = fake_client.models.generate_content.call_args.kwargs
+    assert kwargs["config"].temperature == 0.8
+    assert "warm, calm, reflective tone" in kwargs["contents"]
+    out = capsys.readouterr().out
+    assert "Gemini TTS voice: Orus" in out
+    assert "Gemini TTS delivery profile: evening_reflective" in out
 
 
 def test_generate_with_gemini_logs_style_selection_reason(monkeypatch, tmp_path, capsys):

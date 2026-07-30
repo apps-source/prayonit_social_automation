@@ -148,6 +148,23 @@ def test_get_current_weekday_monday():
     assert content_engine.get_current_weekday(now=monday) == "monday"
 
 
+def test_late_wednesday_eastern_does_not_resolve_as_thursday():
+    late_wednesday_eastern = datetime(
+        2026, 7, 30, 3, 1, tzinfo=timezone.utc
+    )
+    assert (
+        content_engine.get_current_weekday(now=late_wednesday_eastern)
+        == "wednesday"
+    )
+    content = content_engine.get_todays_content(
+        slot="evening", now=late_wednesday_eastern
+    )
+    assert content["content_type"] == "devotional_read"
+    assert content["prayer_category_id"] == "devotional"
+    assert content["video_template"] == "long_devotional"
+    assert content["video_library"] == "long"
+
+
 def test_get_current_slot_morning_and_evening():
     morning_dt = datetime(2026, 7, 20, 8, 0, tzinfo=timezone.utc)
     evening_dt = datetime(2026, 7, 20, 19, 0, tzinfo=timezone.utc)
@@ -268,6 +285,13 @@ def test_load_hook_styles_returns_25_entries_with_required_fields():
     for entry in styles:
         for key in ("name", "psychology", "best_time", "emotions", "example"):
             assert key in entry
+
+
+def test_legacy_empathy_hook_style_resolves_through_safe_alias():
+    hook = content_engine.get_random_hook(style="empathy")
+    assert hook is not None
+    assert hook["name"] == "Recognition"
+    assert "Empathy" in hook["aliases"]
 
 
 def test_load_life_moments_returns_100_entries_with_required_fields():

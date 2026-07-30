@@ -296,6 +296,38 @@ def test_tiktok_metadata_has_only_ai_generated_flag():
     assert input_data["metadata"]["tiktok"] == {"isAiGenerated": True}
 
 
+def test_tiktok_verified_title_is_serialized_with_ai_disclosure():
+    input_data = buffer_client.build_create_post_input(
+        channel_id="chan-1",
+        caption="caption text",
+        service="tiktok",
+        post_type="video",
+        due_at_iso="2026-07-10T13:00:00Z",
+        video_url="https://cdn.example.com/reel.mp4",
+        platform_options={
+            "title": "A prayer for today",
+            "isAiGenerated": True,
+        },
+    )
+    assert input_data["metadata"]["tiktok"] == {
+        "title": "A prayer for today",
+        "isAiGenerated": True,
+    }
+
+
+def test_tiktok_unverified_metadata_fields_are_rejected():
+    with pytest.raises(ValueError, match="Unsupported TikTok Buffer options"):
+        buffer_client.build_create_post_input(
+            channel_id="chan-1",
+            caption="caption text",
+            service="tiktok",
+            post_type="video",
+            due_at_iso="2026-07-10T13:00:00Z",
+            video_url="https://cdn.example.com/reel.mp4",
+            platform_options={"disableComments": True},
+        )
+
+
 def test_tiktok_sends_no_link_attachment():
     input_data = _capture_video_input("tiktok", "video", link="https://example.com/app")
     assert "link" not in input_data["metadata"]["tiktok"]
@@ -335,4 +367,3 @@ def test_same_uploaded_video_url_reused_across_three_calls():
     assert fb_input["assets"] == [{"video": {"url": video_url}}]
     assert ig_input["assets"] == [{"video": {"url": video_url}}]
     assert tiktok_input["assets"] == [{"video": {"url": video_url}}]
-

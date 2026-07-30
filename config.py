@@ -120,6 +120,12 @@ APP_STORE_BADGE_PATH = _resolve_path(_assets_section.get("app_store_badge_path",
 GOOGLE_PLAY_BADGE_PATH = _resolve_path(_assets_section.get("google_play_badge_path", "assets/branding/google_play_badge.png"))
 MOTION_BACKGROUNDS_DIR = _resolve_path(_assets_section.get("motion_backgrounds_path", "assets/motion_backgrounds"))
 LONG_FORM_VIDEO_DIR = _resolve_path(_assets_section.get("long_form_videos_path", "assets/videos/long"))
+SCENIC_ASSET_CATALOG_PATH = PROJECT_ROOT / "creative" / "video_assets.json"
+SCENIC_SELECTION_CONFIG_PATH = PROJECT_ROOT / "creative" / "scenic_selection.json"
+SCENIC_SELECTION_DIAGNOSTIC_DIR = (
+    PROJECT_ROOT / "output" / "validation" / "sprint3c_scenic_selection"
+)
+LONG_FORM_CROSSFADE_SECONDS = 0.6
 
 # ---------- Creative Engine v2: component recency tracking ----------
 # Lightweight local recency tracker for theology_actions.json component
@@ -139,10 +145,10 @@ LEGACY_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_API_KEY_PRIMARY = os.getenv("GEMINI_API_KEY_PRIMARY", "").strip() or LEGACY_GEMINI_API_KEY
 GEMINI_API_KEY = GEMINI_API_KEY_PRIMARY
 GEMINI_API_KEY_SECONDARY = os.getenv("GEMINI_API_KEY_SECONDARY", "").strip() or GEMINI_API_KEY_PRIMARY
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 CONTENT_MODEL_PRIMARY = os.getenv("CONTENT_MODEL_PRIMARY", GEMINI_MODEL).strip() or GEMINI_MODEL
-CONTENT_MODEL_SECONDARY = os.getenv("CONTENT_MODEL_SECONDARY", "gemini-2.5-flash").strip()
-CONTENT_MODEL_TERTIARY = os.getenv("CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite").strip()
+CONTENT_MODEL_SECONDARY = os.getenv("CONTENT_MODEL_SECONDARY", "gemini-3.5-flash").strip()
+CONTENT_MODEL_TERTIARY = os.getenv("CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite").strip()
 
 # ---------- Buffer ----------
 BUFFER_API_KEY = os.getenv("BUFFER_API_KEY", "")
@@ -223,6 +229,9 @@ try:
     VOICE_TEMPERATURE = float(os.getenv("VOICE_TEMPERATURE", "1").strip() or "1")
 except ValueError:
     VOICE_TEMPERATURE = 1.0
+TTS_DELIVERY_PROFILE_OVERRIDE = os.getenv(
+    "TTS_DELIVERY_PROFILE_OVERRIDE", ""
+).strip()
 VOICE_FALLBACK_ENABLED = os.getenv("VOICE_FALLBACK_ENABLED", "true").strip().lower() == "true"
 
 # ---------- Paths ----------

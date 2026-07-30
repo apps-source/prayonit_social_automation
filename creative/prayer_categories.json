@@ -4,105 +4,165 @@
     "label": "Morning Prayer",
     "allowed_content_types": ["prayer_read", "night_prayer_or_rest"],
     "allowed_slots": ["morning"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "hopeful_encouragement",
+      "voice_profile_id": "natural_conversational",
+      "body_profile_id": "morning_direction"
+    }
   },
   {
     "id": "night_prayer",
     "label": "Night Prayer",
     "allowed_content_types": ["prayer_read", "night_prayer_or_rest"],
     "allowed_slots": ["evening"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "gentle_invitation",
+      "voice_profile_id": "calm_reflective",
+      "body_profile_id": "night_release"
+    }
   },
   {
     "id": "hope",
     "label": "Hope",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement", "recognition_engagement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "hopeful_encouragement",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "hope_and_encouragement"
+    }
   },
   {
     "id": "peace",
     "label": "Peace",
     "allowed_content_types": ["prayer_read", "devotional_read", "gratitude_reflection", "hope_encouragement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "quiet_reflection",
+      "voice_profile_id": "calm_reflective",
+      "body_profile_id": "peace_and_rest"
+    }
   },
   {
     "id": "anxiety",
     "label": "Anxiety",
     "allowed_content_types": ["prayer_read", "devotional_read", "recognition_engagement", "night_prayer_or_rest"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "empathetic_recognition",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "anxiety_relief"
+    }
   },
   {
     "id": "fear",
     "label": "Fear",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement", "recognition_engagement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "empathetic_recognition",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "anxiety_relief"
+    }
   },
   {
     "id": "healing",
     "label": "Healing",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "empathetic_recognition",
+      "voice_profile_id": "calm_reflective",
+      "body_profile_id": "healing_and_comfort"
+    }
   },
   {
     "id": "protection",
     "label": "Protection",
     "allowed_content_types": ["prayer_read", "devotional_read"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "protective_intercession",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "protection_and_covering"
+    }
   },
   {
     "id": "forgiveness",
     "label": "Forgiveness",
     "allowed_content_types": ["prayer_read", "devotional_read"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "quiet_reflection",
+      "voice_profile_id": "calm_reflective",
+      "body_profile_id": "forgiveness_and_restoration"
+    }
   },
   {
     "id": "guidance",
     "label": "Guidance",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "curiosity",
+      "voice_profile_id": "natural_conversational",
+      "body_profile_id": "guidance_and_decisions"
+    }
   },
   {
     "id": "strength",
     "label": "Strength",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "hopeful_encouragement",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "strength_and_perseverance"
+    }
   },
   {
     "id": "gratitude",
     "label": "Gratitude",
     "allowed_content_types": ["prayer_read", "devotional_read", "gratitude_reflection"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "quiet_reflection",
+      "voice_profile_id": "calm_reflective",
+      "body_profile_id": "gratitude_and_praise"
+    }
   },
   {
     "id": "family",
     "label": "Family",
     "allowed_content_types": ["prayer_read", "devotional_read", "hope_encouragement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "protective_intercession",
+      "voice_profile_id": "gentle_encouraging",
+      "body_profile_id": "family_and_relationships"
+    }
   },
   {
     "id": "bible_verse",
     "label": "Bible Verse",
     "allowed_content_types": ["devotional_read", "gratitude_reflection", "recognition_engagement"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "scripture_first",
+      "voice_profile_id": "scripture_reader",
+      "body_profile_id": "scripture_centered"
+    }
   },
   {
     "id": "devotional",
     "label": "Devotional",
     "allowed_content_types": ["devotional_read", "gratitude_reflection"],
     "allowed_slots": ["anytime"],
-    "default_profiles": {}
+    "default_profiles": {
+      "hook_profile_id": "curiosity",
+      "voice_profile_id": "natural_conversational",
+      "body_profile_id": "devotional_reflection"
+    }
   },
   {
     "id": "general_prayer",
@@ -110,8 +170,9 @@
     "allowed_content_types": [],
     "allowed_slots": ["anytime"],
     "default_profiles": {
-      "hook_profile_id": "current_default",
+      "hook_profile_id": "gentle_invitation",
       "voice_profile_id": "natural_conversational",
+      "body_profile_id": "general_prayer",
       "caption_profile_id": "current_default",
       "scene_profile_id": "current_default",
       "cta_profile_id": "current_default",

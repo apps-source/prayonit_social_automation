@@ -3,6 +3,7 @@
   "global_defaults": {
     "hook_profile_id": "current_default",
     "voice_profile_id": "natural_conversational",
+    "body_profile_id": "current_default",
     "caption_profile_id": "current_default",
     "scene_profile_id": "current_default",
     "cta_profile_id": "current_default",
@@ -10,13 +11,346 @@
   },
   "hook_profiles": {
     "current_default": {
-      "label": "Current Hook Behavior"
+      "label": "Current Hook Behavior",
+      "inject_guidance": false,
+      "compatible_categories": ["any"]
+    },
+    "gentle_invitation": {
+      "label": "Gentle Invitation",
+      "emotional_tone": "calm, safe, and welcoming",
+      "opening_style": "invite the viewer into a quiet moment without pressure",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Open with a gentle invitation that makes it easy to pause and continue listening.",
+      "preferred_verbs": ["pause", "rest", "bring", "release", "pray"],
+      "avoid": ["pressure", "countdown language", "fear-based urgency", "guaranteed outcomes"],
+      "curiosity_level": "low",
+      "urgency_level": "low",
+      "allow_first_person": false,
+      "rhetorical_questions": "discouraged",
+      "compatible_categories": ["night_prayer", "general_prayer"]
+    },
+    "empathetic_recognition": {
+      "label": "Empathetic Recognition",
+      "emotional_tone": "compassionate, specific, and emotionally safe",
+      "opening_style": "name the viewer's felt experience without diagnosing or intensifying it",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Recognize the emotional burden directly, then create immediate safety and understanding.",
+      "preferred_verbs": ["feel", "carry", "face", "breathe", "pause"],
+      "avoid": ["diagnosis", "shame", "fear escalation", "absolute claims", "guaranteed relief"],
+      "curiosity_level": "low",
+      "urgency_level": "moderate",
+      "allow_first_person": false,
+      "rhetorical_questions": "optional",
+      "compatible_categories": ["anxiety", "fear", "healing"]
+    },
+    "hopeful_encouragement": {
+      "label": "Hopeful Encouragement",
+      "emotional_tone": "warm, steady, and forward-looking",
+      "opening_style": "offer immediate encouragement grounded in the viewer's present need",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Create a concise opening that helps the viewer expect hope without promising a specific outcome.",
+      "preferred_verbs": ["begin", "trust", "keep", "receive", "remember"],
+      "avoid": ["hype", "guarantees", "forced positivity", "sermon language"],
+      "curiosity_level": "low",
+      "urgency_level": "low",
+      "allow_first_person": false,
+      "rhetorical_questions": "optional",
+      "compatible_categories": ["morning_prayer", "hope", "strength"]
+    },
+    "quiet_reflection": {
+      "label": "Quiet Reflection",
+      "emotional_tone": "peaceful, thoughtful, and unhurried",
+      "opening_style": "offer one contemplative observation or gentle reflective question",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Begin with a quiet thought that creates space for reflection without becoming abstract.",
+      "preferred_verbs": ["notice", "remember", "consider", "thank", "release"],
+      "avoid": ["dramatic urgency", "clickbait", "dense theology", "multiple questions"],
+      "curiosity_level": "low",
+      "urgency_level": "low",
+      "allow_first_person": false,
+      "rhetorical_questions": "optional",
+      "compatible_categories": ["peace", "gratitude", "forgiveness"]
+    },
+    "curiosity": {
+      "label": "Purposeful Curiosity",
+      "emotional_tone": "thoughtful, clear, and inviting",
+      "opening_style": "create one honest open loop that the devotional or prayer resolves",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Use restrained curiosity to invite attention while keeping the spiritual direction truthful and clear.",
+      "preferred_verbs": ["consider", "notice", "listen", "ask", "seek"],
+      "avoid": ["clickbait", "withheld divine claims", "sensational promises", "multiple open loops"],
+      "curiosity_level": "moderate",
+      "urgency_level": "low",
+      "allow_first_person": false,
+      "rhetorical_questions": "encouraged",
+      "compatible_categories": ["guidance", "devotional"]
+    },
+    "scripture_first": {
+      "label": "Scripture First",
+      "emotional_tone": "grounded, reverent, and clear",
+      "opening_style": "lead with a Scripture reference or a concise truth explicitly grounded in Scripture",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Make Scripture the immediate anchor and transition naturally into its relevance for the resolved Life Moment.",
+      "preferred_verbs": ["read", "remember", "hear", "hold", "trust"],
+      "avoid": ["invented quotations", "God told me language", "unsupported interpretation", "verse dumping"],
+      "curiosity_level": "low",
+      "urgency_level": "low",
+      "allow_first_person": false,
+      "rhetorical_questions": "optional",
+      "compatible_categories": ["bible_verse"]
+    },
+    "protective_intercession": {
+      "label": "Protective Intercession",
+      "emotional_tone": "caring, steady, and prayerful",
+      "opening_style": "invite direct prayer over a person, family, home, or present concern",
+      "preferred_word_range": [4, 7],
+      "preferred_reading_seconds": 2.3,
+      "writing_guidance": "Open with a clear invitation to pray for protection or family while avoiding fear-based motivation.",
+      "preferred_verbs": ["pray", "cover", "guard", "guide", "hold"],
+      "avoid": ["fear tactics", "guaranteed safety", "spiritual threats", "dramatic declarations"],
+      "curiosity_level": "low",
+      "urgency_level": "moderate",
+      "allow_first_person": false,
+      "rhetorical_questions": "discouraged",
+      "compatible_categories": ["protection", "family"]
     }
   },
   "voice_profiles": {
     "natural_conversational": {
       "label": "Natural Conversational",
-      "voice_style_profile": "natural_conversational"
+      "purpose": "content_writing_only",
+      "inject_guidance": false,
+      "compatible_categories": ["morning_prayer", "guidance", "devotional", "general_prayer"]
+    },
+    "calm_reflective": {
+      "label": "Calm Reflective Writing",
+      "purpose": "content_writing_only",
+      "sentence_rhythm": "measured sentences with natural breathing room",
+      "diction": "simple, grounded, and contemplative",
+      "emotional_tone": "calm and reassuring",
+      "transitions": "gentle transitions that do not rush emotional movement",
+      "writing_guidance": "Write with quiet confidence and enough space for the viewer to absorb each thought.",
+      "avoid": ["dramatic crescendos", "preaching cadence in the prose", "dense clauses", "hype"],
+      "compatible_categories": ["night_prayer", "peace", "gratitude", "healing", "forgiveness"]
+    },
+    "gentle_encouraging": {
+      "label": "Gentle Encouraging Writing",
+      "purpose": "content_writing_only",
+      "sentence_rhythm": "clear sentences that move gradually from recognition toward hope",
+      "diction": "warm, accessible, and encouraging",
+      "emotional_tone": "compassionate and quietly hopeful",
+      "transitions": "move from burden to reassurance without abrupt emotional turns",
+      "writing_guidance": "Use gentle encouragement that respects the viewer's difficulty while offering a believable next step.",
+      "avoid": ["forced positivity", "guaranteed outcomes", "commands to feel better", "hype"],
+      "compatible_categories": ["hope", "strength", "anxiety", "fear", "protection", "family"]
+    },
+    "compassionate_direct": {
+      "label": "Compassionate Direct Writing",
+      "purpose": "content_writing_only",
+      "sentence_rhythm": "short, direct recognition followed by steady reassurance",
+      "diction": "specific, compassionate, and emotionally precise",
+      "emotional_tone": "direct without sounding urgent or forceful",
+      "transitions": "acknowledge the burden before introducing comfort",
+      "writing_guidance": "Address the viewer's present need clearly while preserving dignity and emotional safety.",
+      "avoid": ["diagnosis", "fear escalation", "shame", "dramatic language"],
+      "compatible_categories": ["anxiety", "fear", "healing"]
+    },
+    "scripture_reader": {
+      "label": "Scripture Reader Writing",
+      "purpose": "content_writing_only",
+      "sentence_rhythm": "measured exposition around concise Scripture references",
+      "diction": "reverent, precise, and easy to understand",
+      "emotional_tone": "grounded and trustworthy",
+      "transitions": "move from Scripture to application without overstating interpretation",
+      "writing_guidance": "Let Scripture organize the message, then connect it carefully to the resolved Life Moment.",
+      "avoid": ["invented quotations", "unsupported interpretation", "verse dumping", "claims of divine authority"],
+      "compatible_categories": ["bible_verse"]
+    }
+  },
+  "body_profiles": {
+    "current_default": {
+      "label": "Current Prayer Body Behavior",
+      "inject_guidance": false,
+      "recognition_focus": [],
+      "petition_focus": [],
+      "reassurance_focus": [],
+      "emotional_movement": [],
+      "closing_focus": [],
+      "avoid": [],
+      "compatible_categories": ["any"]
+    },
+    "general_prayer": {
+      "label": "General Prayer",
+      "recognition_focus": ["a broadly relatable need for God's presence without inventing a crisis"],
+      "petition_focus": ["gratitude", "guidance", "peace", "trust"],
+      "reassurance_focus": ["God's steady presence and the listener's freedom to bring ordinary needs to Him"],
+      "emotional_movement": ["gentle recognition", "simple surrender", "quiet trust"],
+      "closing_focus": ["an inclusive, natural prayer ending without forcing a specific problem"],
+      "avoid": ["invented trauma", "forced urgency", "assuming severe grief, fear, or conflict"],
+      "diagnostic_terms": ["presence", "guidance", "peace", "trust", "thank"],
+      "compatible_categories": ["general_prayer"]
+    },
+    "anxiety_relief": {
+      "label": "Anxiety Relief",
+      "recognition_focus": ["racing thoughts", "uncertainty", "fear", "emotional overload"],
+      "petition_focus": ["steady breathing", "surrender", "trust", "one manageable next step"],
+      "reassurance_focus": ["God's nearness without dismissing the burden or promising immediate relief"],
+      "emotional_movement": ["honest recognition", "gradual release", "grounded calm", "believable hope"],
+      "closing_focus": ["entrust the next moment to God rather than claiming the anxiety is gone"],
+      "avoid": ["just stop worrying", "guaranteed calm", "instant relief", "diagnosis"],
+      "diagnostic_terms": ["thought", "worry", "fear", "uncertain", "breathe", "surrender", "trust"],
+      "compatible_categories": ["anxiety", "fear"]
+    },
+    "protection_and_covering": {
+      "label": "Protection and Covering",
+      "recognition_focus": ["the person, family, children, travel, work, or home being entrusted to God"],
+      "petition_focus": ["God's presence", "covering", "wisdom", "discernment", "safety", "guidance"],
+      "reassurance_focus": ["confident trust in God's presence without implying immunity from harm"],
+      "emotional_movement": ["care", "intercession", "steady confidence", "trust"],
+      "closing_focus": ["place the people and circumstances named in God's care"],
+      "avoid": ["fearmongering", "spiritual threats", "guaranteed safety", "nothing bad will happen"],
+      "diagnostic_terms": ["protect", "cover", "guard", "wisdom", "discern", "safe", "guide"],
+      "compatible_categories": ["protection"]
+    },
+    "morning_direction": {
+      "label": "Morning Direction",
+      "recognition_focus": ["gratitude for a new day and the choices ahead"],
+      "petition_focus": ["strength", "direction", "purpose", "wise choices", "gracious interactions"],
+      "reassurance_focus": ["God's presence through the coming day without promising ease"],
+      "emotional_movement": ["gratitude", "readiness", "hopeful forward movement"],
+      "closing_focus": ["entrust the coming day and its decisions to God"],
+      "avoid": ["bedtime", "falling asleep", "releasing the finished day", "through the night"],
+      "diagnostic_terms": ["morning", "today", "day", "choice", "direction", "purpose", "strength"],
+      "inappropriate_time_terms": ["bedtime", "fall asleep", "through the night"],
+      "compatible_categories": ["morning_prayer"]
+    },
+    "night_release": {
+      "label": "Night Release",
+      "recognition_focus": ["the day that has passed, including weariness, regret, and unfinished concerns"],
+      "petition_focus": ["release", "reflection", "forgiveness", "peace", "rest", "safety through the night"],
+      "reassurance_focus": ["God remains present while the listener rests"],
+      "emotional_movement": ["reflection", "release", "quiet reassurance", "peaceful closure"],
+      "closing_focus": ["entrust the night to God and allow the prayer to settle gently"],
+      "avoid": ["energetic morning language", "hype", "guaranteed sleep", "promising a trouble-free night"],
+      "diagnostic_terms": ["tonight", "day", "release", "rest", "sleep", "peace", "night"],
+      "inappropriate_time_terms": ["start this morning", "begin this morning"],
+      "compatible_categories": ["night_prayer"]
+    },
+    "scripture_centered": {
+      "label": "Scripture Centered",
+      "recognition_focus": ["the Life Moment as illuminated by the selected Scripture"],
+      "petition_focus": ["pray directly from the verse's meaning and truthful application"],
+      "reassurance_focus": ["reassurance grounded in the cited passage rather than a generic slogan"],
+      "emotional_movement": ["Scripture", "careful reflection", "faithful application", "prayerful response"],
+      "closing_focus": ["return to the verse's central truth without overstating its promise"],
+      "avoid": ["decorative verse references", "invented quotations", "unsupported interpretation", "God told me language"],
+      "diagnostic_terms": ["scripture", "verse", "psalm", "proverb", "gospel", "chapter"],
+      "compatible_categories": ["bible_verse"]
+    },
+    "healing_and_comfort": {
+      "label": "Healing and Comfort",
+      "recognition_focus": ["pain, illness, emotional hurt, or weariness without diagnosing"],
+      "petition_focus": ["comfort", "strength", "wise care", "endurance", "God's sustaining presence"],
+      "reassurance_focus": ["dignity and companionship without guaranteeing healing"],
+      "emotional_movement": ["honest pain", "compassion", "sustaining hope"],
+      "closing_focus": ["entrust healing and the next faithful step to God"],
+      "avoid": ["guaranteed healing", "medical advice", "blame", "claims that suffering proves weak faith"],
+      "diagnostic_terms": ["heal", "comfort", "pain", "strength", "care", "endure", "restore"],
+      "compatible_categories": ["healing"]
+    },
+    "gratitude_and_praise": {
+      "label": "Gratitude and Praise",
+      "recognition_focus": ["specific gifts, ordinary mercies, and reasons for gratitude"],
+      "petition_focus": ["thankfulness", "humility", "awareness", "generosity"],
+      "reassurance_focus": ["God's goodness without denying unresolved difficulty"],
+      "emotional_movement": ["notice", "thank", "praise", "carry gratitude forward"],
+      "closing_focus": ["end with sincere thanks rather than a generic request list"],
+      "avoid": ["forced positivity", "denying hardship", "transactional gratitude"],
+      "diagnostic_terms": ["thank", "grateful", "gratitude", "praise", "gift", "goodness"],
+      "compatible_categories": ["gratitude"]
+    },
+    "guidance_and_decisions": {
+      "label": "Guidance and Decisions",
+      "recognition_focus": ["uncertainty, competing choices, or the need for discernment"],
+      "petition_focus": ["wisdom", "clarity", "patience", "courage", "wise counsel"],
+      "reassurance_focus": ["permission to take the next faithful step without demanding total certainty"],
+      "emotional_movement": ["acknowledge uncertainty", "seek wisdom", "choose faithful action", "trust"],
+      "closing_focus": ["entrust both the decision and its outcome to God"],
+      "avoid": ["claiming God revealed a specific answer", "fortune telling", "guaranteed success"],
+      "diagnostic_terms": ["guide", "wisdom", "decision", "choice", "discern", "clarity", "step"],
+      "compatible_categories": ["guidance"]
+    },
+    "strength_and_perseverance": {
+      "label": "Strength and Perseverance",
+      "recognition_focus": ["weariness, resistance, discouragement, or a difficult next step"],
+      "petition_focus": ["endurance", "courage", "patience", "faithfulness", "renewed strength"],
+      "reassurance_focus": ["hope grounded in God's presence rather than guaranteed success"],
+      "emotional_movement": ["honest weariness", "renewed resolve", "steady hope"],
+      "closing_focus": ["ask for strength for the next faithful step"],
+      "avoid": ["hustle language", "shaming weakness", "guaranteed victory", "instant transformation"],
+      "diagnostic_terms": ["strength", "endure", "courage", "persevere", "faithful", "hope", "next step"],
+      "compatible_categories": ["strength"]
+    },
+    "family_and_relationships": {
+      "label": "Family and Relationships",
+      "recognition_focus": ["the real joys, strains, responsibilities, or distance within relationships"],
+      "petition_focus": ["patience", "wisdom", "protection", "reconciliation", "healthy love"],
+      "reassurance_focus": ["God's presence in relational complexity without controlling another person's choices"],
+      "emotional_movement": ["care", "honest petition", "grace", "entrusting loved ones to God"],
+      "closing_focus": ["place the named relationships in God's care"],
+      "avoid": ["guaranteed reconciliation", "controlling language", "assigning blame", "assuming family structure"],
+      "diagnostic_terms": ["family", "relationship", "child", "children", "love", "patience", "reconcile"],
+      "compatible_categories": ["family"]
+    },
+    "forgiveness_and_restoration": {
+      "label": "Forgiveness and Restoration",
+      "recognition_focus": ["hurt, regret, resentment, or the need to seek and extend forgiveness"],
+      "petition_focus": ["honesty", "repentance", "mercy", "boundaries", "restoration where wise"],
+      "reassurance_focus": ["grace without minimizing harm or forcing reconciliation"],
+      "emotional_movement": ["honest acknowledgment", "mercy", "release", "wise restoration"],
+      "closing_focus": ["entrust the pace and shape of restoration to God"],
+      "avoid": ["pressuring unsafe reconciliation", "minimizing abuse", "cheap forgiveness", "guaranteed restoration"],
+      "diagnostic_terms": ["forgive", "mercy", "grace", "release", "restore", "repent"],
+      "compatible_categories": ["forgiveness"]
+    },
+    "hope_and_encouragement": {
+      "label": "Hope and Encouragement",
+      "recognition_focus": ["discouragement, waiting, uncertainty, or the desire to begin again"],
+      "petition_focus": ["hope", "trust", "patience", "encouragement", "a faithful next step"],
+      "reassurance_focus": ["possibility and God's presence without promising a particular outcome"],
+      "emotional_movement": ["recognition", "encouragement", "renewed hope", "forward movement"],
+      "closing_focus": ["carry believable hope into the next moment"],
+      "avoid": ["forced optimism", "guaranteed breakthrough", "dismissive reassurance"],
+      "diagnostic_terms": ["hope", "encourage", "trust", "wait", "begin again", "next step"],
+      "compatible_categories": ["hope"]
+    },
+    "peace_and_rest": {
+      "label": "Peace and Rest",
+      "recognition_focus": ["inner noise, tension, weariness, or a need for stillness"],
+      "petition_focus": ["peace", "rest", "stillness", "trust", "patient attention to God"],
+      "reassurance_focus": ["God's nearness without promising that every feeling immediately changes"],
+      "emotional_movement": ["slow down", "release tension", "receive reassurance", "rest in trust"],
+      "closing_focus": ["leave the listener with quiet trust appropriate to the current time of day"],
+      "avoid": ["guaranteed calm", "commands to stop feeling", "forced nighttime imagery"],
+      "diagnostic_terms": ["peace", "rest", "still", "quiet", "trust", "presence"],
+      "compatible_categories": ["peace"]
+    },
+    "devotional_reflection": {
+      "label": "Devotional Reflection",
+      "recognition_focus": ["one concrete spiritual truth connected to the resolved Life Moment"],
+      "petition_focus": ["understanding", "application", "faithful response"],
+      "reassurance_focus": ["grounded encouragement that follows from the reflection"],
+      "emotional_movement": ["observe", "reflect", "apply", "respond"],
+      "closing_focus": ["one concise takeaway or faithful next step"],
+      "avoid": ["sermon outlines", "dense exposition", "unrelated verse dumping", "hard app promotion"],
+      "diagnostic_terms": ["remember", "reflect", "truth", "faithful", "understand", "step"],
+      "compatible_categories": ["devotional"]
     }
   },
   "caption_profiles": {
@@ -41,6 +375,8 @@
       "maximum_dwell_seconds": 3.0,
       "fade_in_seconds": 0.12,
       "fade_out_seconds": 0.12,
+      "start_delay_seconds": 0.5,
+      "end_extension_seconds": 0.35,
       "internal_transition_lead_seconds": 0.0
     }
   },

@@ -16,6 +16,7 @@ import os
 import random
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 _CREATIVE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -38,6 +39,7 @@ _WEEKDAY_NAMES = (
     "saturday",
     "sunday",
 )
+_CONTENT_TIMEZONE = ZoneInfo("America/New_York")
 
 _PRESENTATION_FIELDS = (
     "content_type",
@@ -136,15 +138,16 @@ def load_weekly_rhythm(path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_current_weekday(now: Optional[datetime] = None) -> str:
-    """Return the lowercase weekday name (e.g. 'monday') for `now`
-    (defaults to current UTC time).
-    """
+    """Return the publishing weekday in the Prayonit Eastern time zone."""
     dt = now or datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(_CONTENT_TIMEZONE)
     return _WEEKDAY_NAMES[dt.weekday()]
 
 
 def get_current_slot(now: Optional[datetime] = None) -> str:
-    """Return 'morning' or 'evening' based on the current UTC hour.
+    """Return 'morning' or 'evening' based on the current Eastern hour.
 
     Hours 0-11 are treated as morning, 12-23 as evening. This is a simple,
     deterministic default; callers that already know the slot (e.g. the
@@ -152,6 +155,9 @@ def get_current_slot(now: Optional[datetime] = None) -> str:
     get_todays_content() instead of relying on this clock-based guess.
     """
     dt = now or datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(_CONTENT_TIMEZONE)
     return "morning" if dt.hour < 12 else "evening"
 
 
@@ -302,7 +308,17 @@ def get_random_hook(
     """
     styles = hook_styles if hook_styles is not None else load_hook_styles()
     if style:
-        candidates = [s for s in styles if s.get("name", "").lower() == style.lower()]
+        requested = style.lower()
+        candidates = [
+            hook
+            for hook in styles
+            if hook.get("name", "").lower() == requested
+            or requested
+            in {
+                str(alias).lower()
+                for alias in hook.get("aliases", [])
+            }
+        ]
     else:
         candidates = list(styles)
 

@@ -1,6 +1,7 @@
 [
   {
     "name": "Recognition",
+    "aliases": ["Empathy"],
     "psychology": "The brain prioritizes anything that mirrors its own internal monologue. Seeing your exact thought externalized creates an instant \"how did they know that\" reaction.",
     "best_time": "Morning, late night",
     "emotions": ["anxiety", "exhaustion", "overwhelm"],

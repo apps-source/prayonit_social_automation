@@ -38,6 +38,7 @@ import creative_engine_v3
 import config
 import history_store
 import image_renderer
+import platform_post_preparer
 import prompt_builder
 import resolved_content_brief
 import tracking
@@ -165,6 +166,190 @@ def _resolve_creator_search_topic(
         or str(selection.get("thread_topic", "")).strip()
         or _slugify(str(ad_copy.get("pain_headline", "")).strip()).replace("-", " ")
     )
+
+
+def _select_long_form_scenic_assets(
+    *,
+    brief: resolved_content_brief.ResolvedContentBrief,
+    narration_duration: Optional[float],
+    planned_video_duration: float,
+    run_row_id: int,
+) -> list:
+    """Select and persist long-form scenery without coupling it to rendering."""
+    import long_form_renderer
+    import scenic_asset_catalog
+    import scenic_asset_selector
+
+    try:
+        selection_policy = scenic_asset_selector.load_selection_config(
+            config.SCENIC_SELECTION_CONFIG_PATH
+        )
+        recent_window = int(selection_policy.get("recent_use_window", 10))
+    except scenic_asset_selector.ScenicSelectionConfigError:
+        selection_policy = None
+        recent_window = 10
+    recent_asset_ids = history_store.get_recent_scenic_asset_ids(
+        limit_runs=recent_window,
+        exclude_statuses=("dry_run",),
+    )
+    context = scenic_asset_selector.build_selection_context(
+        brief,
+        narration_duration_seconds=narration_duration,
+        planned_video_duration_seconds=planned_video_duration,
+        recent_asset_ids=recent_asset_ids,
+    )
+    diagnostic_name = "selection-{0}.json".format(_slugify(brief.run_id))
+
+    try:
+        result = scenic_asset_selector.load_and_select_scenic_assets(
+            context,
+            catalog_path=config.SCENIC_ASSET_CATALOG_PATH,
+            video_dir=config.LONG_FORM_VIDEO_DIR,
+            selection_config_path=config.SCENIC_SELECTION_CONFIG_PATH,
+            crossfade_seconds=config.LONG_FORM_CROSSFADE_SECONDS,
+        )
+        selected_assets = [
+            asset.to_metadata_dict() for asset in result.selected_assets
+        ]
+        selection_metadata = result.to_metadata_dict()
+        print(
+            "Scenic selection: category={0} time={1} emotion={2} "
+            "requested={3} eligible={4}/{5}".format(
+                context.prayer_category_id,
+                context.time_of_day,
+                context.emotional_tone,
+                result.requested_clip_count,
+                result.eligible_after_hard_filters,
+                result.eligible_catalog_count,
+            )
+        )
+        for asset in result.selected_assets:
+            print(
+                "Scenic selection {0}: {1} score={2:.1f} family={3} "
+                "duplicate_group={4} estimated_stretch={5:.2f}x".format(
+                    asset.selection_order,
+                    asset.filename,
+                    asset.selection_score,
+                    asset.visual_family,
+                    asset.duplicate_group or "none",
+                    asset.estimated_stretch_ratio,
+                )
+            )
+        for step in result.relaxation_steps:
+            print("Scenic selection relaxation: {0}".format(step))
+        for warning in result.warnings:
+            print("Scenic selection WARNING: {0}".format(warning))
+        selected_video_assets = result.paths
+        try:
+            scenic_asset_selector.write_selection_diagnostic(
+                context,
+                result,
+                output_dir=config.SCENIC_SELECTION_DIAGNOSTIC_DIR,
+                filename=diagnostic_name,
+            )
+        except OSError as exc:
+            print("Scenic selection diagnostic write failed: {0}".format(exc))
+    except Exception as exc:
+        primary_candidates = scenic_asset_catalog.list_eligible_video_filenames(
+            config.LONG_FORM_VIDEO_DIR
+        )
+        error_text = str(exc).lower()
+        if not primary_candidates:
+            failure_kind = "primary_library_absence"
+        elif (
+            isinstance(exc, scenic_asset_catalog.CatalogValidationError)
+            and "missing from video library" in error_text
+        ):
+            failure_kind = "selected_file_missing"
+        elif isinstance(exc, scenic_asset_catalog.CatalogValidationError):
+            failure_kind = "catalog_validation_failure"
+        elif isinstance(
+            exc, scenic_asset_selector.InsufficientCompatibleAssets
+        ):
+            failure_kind = "insufficient_compatible_assets"
+        elif isinstance(exc, FileNotFoundError):
+            failure_kind = "primary_library_absence_or_selected_file_missing"
+        else:
+            failure_kind = "scenic_selection_failure"
+        print(
+            "Scenic selection {0}: {1}. Falling back to legacy random selector.".format(
+                failure_kind,
+                exc,
+            )
+        )
+        legacy_assets = long_form_renderer.select_long_form_video_assets(
+            target_count=scenic_asset_selector.requested_clip_count(
+                context.narration_duration_seconds,
+                selection_policy
+                or {
+                    "long_video_threshold_seconds": 42,
+                    "short_video_clip_count": 5,
+                    "long_video_clip_count": 6,
+                },
+            ),
+            long_video_dir=config.LONG_FORM_VIDEO_DIR,
+            fallback_dir=config.MOTION_BACKGROUNDS_DIR,
+        )
+        selected_assets = [
+            {
+                "asset_id": "legacy_filename:{0}".format(spec.path.name),
+                "filename": spec.path.name,
+                "visual_family": "legacy_unknown",
+                "duplicate_group": None,
+                "selection_order": index,
+                "selection_score": None,
+                "selection_reasons": ["legacy_random_fallback", failure_kind],
+            }
+            for index, spec in enumerate(legacy_assets, start=1)
+        ]
+        fallback_library_used = any(
+            spec.path.parent.resolve()
+            == Path(config.MOTION_BACKGROUNDS_DIR).resolve()
+            for spec in legacy_assets
+        )
+        print(
+            "Scenic selection fallback library used: {0}".format(
+                str(fallback_library_used).lower()
+            )
+        )
+        selection_metadata = {
+            "selected_assets": selected_assets,
+            "requested_clip_count": len(legacy_assets),
+            "selected_clip_count": len(legacy_assets),
+            "fallback_used": True,
+            "fallback_reason": failure_kind,
+            "fallback_library_used": fallback_library_used,
+            "relaxation_steps": [],
+            "recent_use_handling": "not_applied_to_legacy_fallback",
+            "warnings": [str(exc)],
+        }
+        selected_video_assets = legacy_assets
+        try:
+            scenic_asset_selector.write_fallback_diagnostic(
+                context,
+                selection_metadata,
+                output_dir=config.SCENIC_SELECTION_DIAGNOSTIC_DIR,
+                filename=diagnostic_name,
+            )
+        except OSError as diagnostic_exc:
+            print(
+                "Scenic selection diagnostic write failed: {0}".format(
+                    diagnostic_exc
+                )
+            )
+
+    history_store.merge_run_resolved_brief_metadata(
+        run_row_id,
+        {
+            "selected_scenic_assets": selected_assets,
+            "scenic_selection": {
+                key: value
+                for key, value in selection_metadata.items()
+                if key != "selected_assets"
+            },
+        },
+    )
+    return selected_video_assets
 
 
 def build_tiktok_caption(
@@ -742,9 +927,14 @@ def cmd_history(days):
 
 
 def _caption_profile_preview_override():
-    if not (config.TEST_MODE or config.PREVIEW_MODE):
-        return None
     return config.CAPTION_PROFILE_PREVIEW_OVERRIDE or None
+
+
+def _resolve_run_weekly_content(slot, now=None):
+    run_started_at = now or datetime.now(timezone.utc)
+    return run_started_at, content_engine.get_todays_content(
+        slot=slot, now=run_started_at
+    )
 
 
 def cmd_run(slot) -> int:
@@ -757,7 +947,8 @@ def cmd_run(slot) -> int:
     reels_only_output = output_mode == "reels_only"
 
     run_id = str(uuid.uuid4())
-    due_at = next_slot_datetime_utc(slot)
+    run_started_at, weekly_content = _resolve_run_weekly_content(slot)
+    due_at = next_slot_datetime_utc(slot, now=run_started_at)
     due_at_iso = to_iso8601_utc(due_at)
     print("Run ID: {0}".format(run_id))
     print("TEST_MODE: {0}".format(config.TEST_MODE))
@@ -769,17 +960,18 @@ def cmd_run(slot) -> int:
     caption_profile_override = _caption_profile_preview_override()
     if caption_profile_override:
         print(
-            "Caption profile preview override: {0}".format(
+            "Explicit caption profile override: {0}".format(
                 caption_profile_override
             )
         )
     brief = resolved_content_brief.resolve_content_brief(
         run_id=run_id,
         slot=slot,
-        post_date=due_at.date().isoformat(),
+        post_date=run_started_at.astimezone(config.EASTERN_TZ).date().isoformat(),
         platform_mode=output_mode,
         candidate_campaign=selection["campaign"],
         campaigns=campaign_candidates,
+        weekly_content=weekly_content,
         caption_profile_override=caption_profile_override,
     )
     brief_report = resolved_content_brief.validate_resolved_content_brief(brief)
@@ -990,8 +1182,64 @@ def cmd_run(slot) -> int:
     print("Generated copy:")
     print(json.dumps(ad_copy, indent=2))
 
-    platform_captions = prompt_builder.build_platform_captions(ad_copy, selection, tracked_urls)
-    tiktok_caption = build_tiktok_caption(ad_copy, selection, brief)
+    legacy_platform_captions = prompt_builder.build_platform_captions(
+        ad_copy, selection, tracked_urls
+    )
+    legacy_tiktok_caption = build_tiktok_caption(ad_copy, selection, brief)
+    platform_caption_sources = {
+        "facebook": legacy_platform_captions["facebook"],
+        "instagram": legacy_platform_captions["instagram"],
+        "tiktok": legacy_tiktok_caption,
+    }
+    prepared_platform_bases = {}
+    preparation_errors = {}
+    for platform, base_caption in platform_caption_sources.items():
+        try:
+            prepared_platform_bases[platform] = (
+                platform_post_preparer.prepare_platform_post(
+                    platform=platform,
+                    base_caption=base_caption,
+                    brief=brief,
+                    scheduled_at=due_at_iso,
+                    post_type="video" if platform == "tiktok" else "reel",
+                    direct_url=(
+                        tracked_urls["facebook"]
+                        if platform == "facebook"
+                        else None
+                    ),
+                )
+            )
+        except platform_post_preparer.PlatformPostPreparationError as exc:
+            preparation_errors[platform] = str(exc)
+            print(
+                "Platform preparation failed for {0}: {1}".format(
+                    platform, exc
+                ),
+                file=sys.stderr,
+            )
+    platform_captions = {
+        platform: (
+            prepared_platform_bases[platform].public_caption
+            if platform in prepared_platform_bases
+            else legacy_platform_captions[platform]
+        )
+        for platform in ("facebook", "instagram")
+    }
+    tiktok_caption = (
+        prepared_platform_bases["tiktok"].public_caption
+        if "tiktok" in prepared_platform_bases
+        else legacy_tiktok_caption
+    )
+    history_store.merge_run_resolved_brief_metadata(
+        run_row_id,
+        {
+            "prepared_platform_posts": {
+                platform: post.to_persistence_dict()
+                for platform, post in prepared_platform_bases.items()
+            },
+            "platform_preparation_errors": preparation_errors,
+        },
+    )
     print("Facebook caption: {0}".format(platform_captions["facebook"]))
     print("Instagram caption: {0}".format(platform_captions["instagram"]))
     print("TikTok caption: {0}".format(tiktok_caption))
@@ -1075,8 +1323,10 @@ def cmd_run(slot) -> int:
         import motion_renderer
 
         try:
-            todays_content = content_engine.get_todays_content(slot=slot)
-            presentation_config = {**content_engine.get_presentation_config(todays_content), "slot": slot}
+            presentation_config = {
+                **content_engine.get_presentation_config(weekly_content),
+                "slot": slot,
+            }
             video_template = presentation_config.get("video_template", "short_promo")
             if video_template in ("long_prayer", "long_devotional", "long_encouragement"):
                 filename_suffix = video_template.replace("long_", "")
@@ -1106,6 +1356,11 @@ def cmd_run(slot) -> int:
                             voice_provider.select_style_instruction(ad_copy),
                             audio_filename,
                             copy=ad_copy,
+                            delivery_context={
+                                "slot": brief.slot,
+                                "content_type": brief.content_type,
+                                "prayer_category_id": brief.prayer_category_id,
+                            },
                         )
                         if narration_audio_path is not None:
                             narration_duration = voice_provider.measure_audio_duration(narration_audio_path)
@@ -1120,9 +1375,21 @@ def cmd_run(slot) -> int:
                     filename_suffix,
                     timestamp,
                 )
+                planned_video_duration = long_form_renderer.resolve_long_form_duration(
+                    ad_copy,
+                    presentation_config,
+                    narration_duration=narration_duration,
+                )[0]
+                selected_video_assets = _select_long_form_scenic_assets(
+                    brief=brief,
+                    narration_duration=narration_duration,
+                    planned_video_duration=planned_video_duration,
+                    run_row_id=run_row_id,
+                )
                 video_local_path = long_form_renderer.render_long_form_video(
                     copy=ad_copy,
                     presentation_config=presentation_config,
+                    video_assets=selected_video_assets,
                     output_path=candidate_video_path,
                     narration_audio_path=narration_audio_path,
                     narration_duration=narration_duration,
@@ -1172,6 +1439,11 @@ def cmd_run(slot) -> int:
                 "post_type": "video",
                 "due_at_iso": due_at_iso,
                 "caption": tiktok_caption,
+                "platform_options": (
+                    prepared_platform_bases["tiktok"].platform_options
+                    if "tiktok" in prepared_platform_bases
+                    else {"isAiGenerated": True}
+                ),
             })))
         print("{0}=true, so nothing was uploaded or posted.".format(mode_label))
         return 0
@@ -1231,37 +1503,161 @@ def cmd_run(slot) -> int:
         run_row_id,
         generated_feed_object_path=feed_remote_path,
         generated_story_object_path=story_remote_path,
-        status="published",
+        status="prepared",
     )
 
-    buffer_jobs = []
+    buffer_job_specs = []
     if not reels_only_output:
-        buffer_jobs.extend([
-            ("facebook", "post", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], feed_url, None, tracked_urls["facebook"]),
-            ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], feed_url, None, tracked_urls["instagram"]),
-            ("facebook", "story", config.FACEBOOK_CHANNEL_ID, "", story_url, None, None),
-            ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, "", story_url, None, None),
+        buffer_job_specs.extend([
+            ("facebook", "post", config.FACEBOOK_CHANNEL_ID, feed_url, None, tracked_urls["facebook"]),
+            ("instagram", "post", config.INSTAGRAM_CHANNEL_ID, feed_url, None, tracked_urls["instagram"]),
+            ("facebook", "story", config.FACEBOOK_CHANNEL_ID, story_url, None, None),
+            ("instagram", "story", config.INSTAGRAM_CHANNEL_ID, story_url, None, None),
         ])
 
     if video_url is not None:
         # The same generated MP4 is reused for all automatic video destinations.
-        buffer_jobs.extend([
-            ("facebook", "reel", config.FACEBOOK_CHANNEL_ID, platform_captions["facebook"], None, video_url, None),
-            ("instagram", "reel", config.INSTAGRAM_CHANNEL_ID, platform_captions["instagram"], None, video_url, None),
-            ("tiktok", "video", config.TIKTOK_CHANNEL_ID, tiktok_caption, None, video_url, None),
+        buffer_job_specs.extend([
+            ("facebook", "reel", config.FACEBOOK_CHANNEL_ID, None, video_url, None),
+            ("instagram", "reel", config.INSTAGRAM_CHANNEL_ID, None, video_url, None),
+            ("tiktok", "video", config.TIKTOK_CHANNEL_ID, None, video_url, None),
         ])
 
     successes = []
     failures = []
+    skipped_successes = []
+    prepared_jobs = []
+    platform_post_records = {}
+    run_metadata = history_store.get_run_resolved_brief_metadata(run_row_id)
+    selected_asset_ids = [
+        str(asset.get("asset_id", ""))
+        for asset in run_metadata.get("selected_scenic_assets", [])
+        if isinstance(asset, dict) and asset.get("asset_id")
+    ]
 
-    for service, item_post_type, channel_id, caption, image_url, job_video_url, tracked_url in buffer_jobs:
+    for (
+        service,
+        item_post_type,
+        channel_id,
+        image_url,
+        job_video_url,
+        tracked_url,
+    ) in buffer_job_specs:
         label = "{0} {1}".format(service, item_post_type)
-        existing_delivery = history_store.get_platform_delivery_state(
+        media_reference = image_url or job_video_url
+        try:
+            if service in preparation_errors:
+                raise platform_post_preparer.PlatformPostPreparationError(
+                    preparation_errors[service]
+                )
+            prepared = platform_post_preparer.prepare_platform_post(
+                platform=service,
+                base_caption=platform_caption_sources[service],
+                brief=brief,
+                scheduled_at=due_at_iso,
+                post_type=item_post_type,
+                media_reference=media_reference,
+                direct_url=(
+                    tracked_urls["facebook"]
+                    if service == "facebook"
+                    else None
+                ),
+                selected_asset_ids=selected_asset_ids,
+            )
+            prepared = prepared.with_delivery(
+                post_type=item_post_type,
+                media_reference=media_reference,
+            )
+            prepared.validate()
+            prepared_jobs.append(
+                (
+                    prepared,
+                    channel_id,
+                    image_url,
+                    job_video_url,
+                    tracked_url,
+                )
+            )
+            platform_post_records[label] = {
+                **prepared.to_persistence_dict(),
+                "publication_status": "prepared",
+                "buffer_post_id": None,
+                "published_url": None,
+                "failure_message": None,
+                "attempt_timestamp": None,
+            }
+        except Exception as exc:
+            print("FAILED preparing {0}: {1}".format(label, exc), file=sys.stderr)
+            history_store.save_post_error(
+                run_id=run_id,
+                platform=service,
+                post_type=item_post_type,
+                campaign_name=campaign["name"],
+                formula_name=formula["name"],
+                persona_name=persona["name"] if persona else None,
+                slot=slot,
+                error_message=str(exc),
+                caption=platform_caption_sources.get(service),
+                image_url=media_reference,
+            )
+            platform_post_records[label] = {
+                "platform": service,
+                "post_type": item_post_type,
+                "publication_status": "failed",
+                "failure_message": str(exc),
+                "attempt_timestamp": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+            }
+            failures.append(label)
+
+    history_store.merge_run_resolved_brief_metadata(
+        run_row_id,
+        {
+            "prepared_platform_posts": platform_post_records,
+            "publishing_summary": {
+                "intended_count": len(buffer_job_specs),
+                "prepared_count": len(prepared_jobs),
+                "preparation_failure_count": len(failures),
+            },
+        },
+    )
+    if not buffer_job_specs:
+        print("No Buffer publishing jobs were requested; run remains prepared.")
+        return 0
+
+    history_store.update_run_record(run_row_id, status="publishing")
+    for (
+        prepared,
+        channel_id,
+        image_url,
+        job_video_url,
+        tracked_url,
+    ) in prepared_jobs:
+        service = prepared.platform
+        item_post_type = prepared.post_type
+        caption = prepared.public_caption
+        label = "{0} {1}".format(service, item_post_type)
+        existing_delivery = history_store.get_successful_platform_delivery_state(
             run_id=run_id, platform=service, post_type=item_post_type
         )
-        if existing_delivery and existing_delivery["buffer_status"] == "scheduled":
-            print("Already completed {0}; skipping duplicate Buffer post.".format(label))
+        if existing_delivery:
+            print(
+                "Already completed {0} as Buffer post {1}; skipping duplicate.".format(
+                    label,
+                    existing_delivery["buffer_post_id"],
+                )
+            )
             successes.append(label)
+            skipped_successes.append(label)
+            platform_post_records[label].update(
+                {
+                    "publication_status": "scheduled",
+                    "buffer_post_id": existing_delivery["buffer_post_id"],
+                    "attempt_timestamp": existing_delivery["created_at_utc"],
+                    "retry_action": "skipped_existing_success",
+                }
+            )
             continue
         try:
             result = buffer_client.buffer_create_post(
@@ -1273,6 +1669,7 @@ def cmd_run(slot) -> int:
                 post_type=item_post_type,
                 due_at_iso=due_at_iso,
                 link=tracked_url,
+                platform_options=prepared.platform_options,
             )
             buffer_post_id = (result.get("post") or {}).get("id")
             print("Queued {0}: {1}".format(label, json.dumps(result, indent=2)))
@@ -1293,6 +1690,16 @@ def cmd_run(slot) -> int:
                 buffer_status="scheduled",
             )
             successes.append(label)
+            platform_post_records[label].update(
+                {
+                    "publication_status": "scheduled",
+                    "buffer_post_id": buffer_post_id,
+                    "attempt_timestamp": datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                    "retry_action": "submitted",
+                }
+            )
         except Exception as exc:
             print("FAILED {0}: {1}".format(label, exc), file=sys.stderr)
             history_store.save_post_error(
@@ -1308,6 +1715,44 @@ def cmd_run(slot) -> int:
                 image_url=image_url or job_video_url,
             )
             failures.append(label)
+            platform_post_records[label].update(
+                {
+                    "publication_status": "failed",
+                    "failure_message": str(exc),
+                    "attempt_timestamp": datetime.now(timezone.utc).strftime(
+                        "%Y-%m-%dT%H:%M:%SZ"
+                    ),
+                    "retry_action": "failed",
+                }
+            )
+
+    final_status = platform_post_preparer.resolve_publishing_status(
+        intended_count=len(buffer_job_specs),
+        success_count=len(successes),
+        failure_count=len(failures),
+    )
+    history_store.update_run_record(
+        run_row_id,
+        status=final_status,
+        error_message=(
+            "Buffer queue failures: {0}".format(", ".join(failures))
+            if failures
+            else None
+        ),
+    )
+    history_store.merge_run_resolved_brief_metadata(
+        run_row_id,
+        {
+            "prepared_platform_posts": platform_post_records,
+            "publishing_summary": {
+                "intended_count": len(buffer_job_specs),
+                "success_count": len(successes),
+                "failure_count": len(failures),
+                "skipped_existing_successes": skipped_successes,
+                "final_status": final_status,
+            },
+        },
+    )
 
     print("\n--- Run summary ---")
     print("Delivery Summary:")
@@ -1324,7 +1769,13 @@ def cmd_run(slot) -> int:
     print("Succeeded ({0}): {1}".format(len(successes), ", ".join(successes) if successes else "none"))
     print("Failed ({0}): {1}".format(len(failures), ", ".join(failures) if failures else "none"))
     if failures:
-        print("FAILED: slot={0} execution error: Buffer queue failures: {1}".format(slot, failures))
+        print(
+            "FAILED: slot={0} status={1} Buffer queue failures: {2}".format(
+                slot,
+                final_status,
+                failures,
+            )
+        )
         return 1
     print("SUCCESS: slot={0} queued to Buffer".format(slot))
     return 0

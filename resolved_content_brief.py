@@ -20,6 +20,7 @@ _FALLBACK_PRAYER_CATEGORY_ID = "general_prayer"
 _PROFILE_REGISTRY_KEYS = {
     "hook_profile_id": "hook_profiles",
     "voice_profile_id": "voice_profiles",
+    "body_profile_id": "body_profiles",
     "caption_profile_id": "caption_profiles",
     "scene_profile_id": "scene_profiles",
     "cta_profile_id": "cta_profiles",
@@ -67,20 +68,80 @@ def load_creative_profile_registry(path: Optional[Path] = None) -> Dict[str, Any
         return json.load(handle)
 
 
-def get_caption_profile_definition(
-    profile_id: str, *, creative_policy_version: Optional[str] = None
+def get_creative_profile_definition(
+    profile_field: str,
+    profile_id: str,
+    *,
+    creative_policy_version: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Return one validated caption profile without selecting it."""
+    """Return one resolved profile definition without selecting a profile."""
     registry = load_creative_profile_registry()
     active_version = str(registry.get("creative_policy_version", "")).strip()
     if creative_policy_version is not None and str(creative_policy_version) != active_version:
         raise RuntimeError(
-            "Caption profile policy version does not match the active creative policy."
+            "Creative profile policy version does not match the active creative policy."
         )
-    profile = registry.get("caption_profiles", {}).get(profile_id)
+    registry_key = _PROFILE_REGISTRY_KEYS.get(profile_field)
+    if registry_key is None:
+        raise RuntimeError(f"Unknown creative profile field: {profile_field}")
+    profile = registry.get(registry_key, {}).get(profile_id)
     if not isinstance(profile, dict):
-        raise RuntimeError(f"Unknown caption profile ID: {profile_id}")
+        profile_label = {
+            "hook_profile_id": "hook profile",
+            "voice_profile_id": "writing profile",
+            "body_profile_id": "body profile",
+            "caption_profile_id": "caption profile",
+        }.get(profile_field, "creative profile")
+        raise RuntimeError(f"Unknown {profile_label} ID: {profile_id}")
     return {"id": profile_id, **profile}
+
+
+def get_hook_profile_definition(
+    profile_id: str, *, creative_policy_version: Optional[str] = None
+) -> Dict[str, Any]:
+    return get_creative_profile_definition(
+        "hook_profile_id",
+        profile_id,
+        creative_policy_version=creative_policy_version,
+    )
+
+
+def get_writing_profile_definition(
+    profile_id: str, *, creative_policy_version: Optional[str] = None
+) -> Dict[str, Any]:
+    """Return writing guidance; this profile never controls TTS delivery."""
+    return get_creative_profile_definition(
+        "voice_profile_id",
+        profile_id,
+        creative_policy_version=creative_policy_version,
+    )
+
+
+def get_body_profile_definition(
+    profile_id: str, *, creative_policy_version: Optional[str] = None
+) -> Dict[str, Any]:
+    """Return resolver-owned prayer-body semantics without selecting a profile."""
+    return get_creative_profile_definition(
+        "body_profile_id",
+        profile_id,
+        creative_policy_version=creative_policy_version,
+    )
+
+
+def get_caption_profile_definition(
+    profile_id: str, *, creative_policy_version: Optional[str] = None
+) -> Dict[str, Any]:
+    return get_creative_profile_definition(
+        "caption_profile_id",
+        profile_id,
+        creative_policy_version=creative_policy_version,
+    )
+
+
+def _hook_style_matches(hook: Dict[str, Any], requested_style: str) -> bool:
+    requested = _normalize_text(requested_style)
+    names = [hook.get("name", ""), *hook.get("aliases", [])]
+    return any(_normalize_text(name) == requested for name in names)
 
 
 def normalize_pain_point(value: str, aliases: Optional[Dict[str, Dict[str, Any]]] = None) -> str:
@@ -139,6 +200,7 @@ class ResolvedContentBrief:
     prayer_category_id: str = _FALLBACK_PRAYER_CATEGORY_ID
     hook_profile_id: str = "current_default"
     voice_profile_id: str = "natural_conversational"
+    body_profile_id: str = "current_default"
     caption_profile_id: str = "current_default"
     scene_profile_id: str = "current_default"
     cta_profile_id: str = "current_default"
@@ -431,7 +493,8 @@ def _validate_creative_resolution(brief: ResolvedContentBrief) -> List[Dict[str,
 
     for field_name, registry_key in _PROFILE_REGISTRY_KEYS.items():
         profile_id = str(getattr(brief, field_name, "")).strip()
-        if not profile_id or profile_id not in registry.get(registry_key, {}):
+        profile = registry.get(registry_key, {}).get(profile_id)
+        if not profile_id or not isinstance(profile, dict):
             results.append(
                 _validation(
                     "critical failure",
@@ -439,10 +502,88 @@ def _validate_creative_resolution(brief: ResolvedContentBrief) -> List[Dict[str,
                     "Resolved creative profile is not present in approved configuration.",
                 )
             )
-        else:
-            results.append(
-                _validation("pass", field_name, "Resolved creative profile is valid.")
+            continue
+
+        if field_name in {"hook_profile_id", "voice_profile_id", "body_profile_id"}:
+            required_fields = (
+                {"writing_guidance", "compatible_categories"}
+                if profile.get("inject_guidance", True)
+                else {"compatible_categories"}
             )
+            if field_name == "voice_profile_id":
+                required_fields.add("purpose")
+            if field_name == "body_profile_id":
+                required_fields = {
+                    "recognition_focus",
+                    "petition_focus",
+                    "reassurance_focus",
+                    "emotional_movement",
+                    "closing_focus",
+                    "avoid",
+                    "compatible_categories",
+                }
+            missing_fields = [
+                required_field
+                for required_field in sorted(required_fields)
+                if required_field not in profile
+                or (
+                    field_name != "body_profile_id"
+                    and not profile.get(required_field)
+                )
+            ]
+            if missing_fields:
+                results.append(
+                    _validation(
+                        "critical failure",
+                        field_name,
+                        "Resolved creative profile definition is incomplete: "
+                        + ", ".join(missing_fields),
+                    )
+                )
+                continue
+
+            if field_name == "body_profile_id":
+                list_fields = required_fields
+                invalid_list_fields = [
+                    required_field
+                    for required_field in sorted(list_fields)
+                    if not isinstance(profile.get(required_field), list)
+                    or (
+                        (
+                            required_field == "compatible_categories"
+                            or profile.get("inject_guidance", True)
+                        )
+                        and not profile.get(required_field)
+                    )
+                ]
+                if invalid_list_fields:
+                    results.append(
+                        _validation(
+                            "critical failure",
+                            field_name,
+                            "Resolved body profile definition has invalid structured fields: "
+                            + ", ".join(invalid_list_fields),
+                        )
+                    )
+                    continue
+
+            compatible_categories = profile.get("compatible_categories", [])
+            if (
+                "any" not in compatible_categories
+                and brief.prayer_category_id not in compatible_categories
+            ):
+                results.append(
+                    _validation(
+                        "critical failure",
+                        field_name,
+                        "Resolved creative profile is incompatible with the prayer category.",
+                    )
+                )
+                continue
+
+        results.append(
+            _validation("pass", field_name, "Resolved creative profile is valid.")
+        )
     return results
 
 
@@ -604,10 +745,11 @@ def log_resolved_content_brief(
     print(f"- content type: {brief.content_type}")
     print(f"- prayer category: {brief.prayer_category_id}")
     print(
-        "- creative profiles: hook={0}, voice={1}, caption={2}, scene={3}, "
-        "cta={4}, hashtag={5}".format(
+        "- creative profiles: hook={0}, voice={1}, body={2}, caption={3}, "
+        "scene={4}, cta={5}, hashtag={6}".format(
             brief.hook_profile_id,
             brief.voice_profile_id,
+            brief.body_profile_id,
             brief.caption_profile_id,
             brief.scene_profile_id,
             brief.cta_profile_id,
@@ -662,7 +804,14 @@ def resolve_content_brief(
     )
     hooks = list(hook_styles if hook_styles is not None else content_engine.load_hook_styles())
     requested_hook_style = str(weekly.get("hook_style", "")).strip()
-    hook = next((item for item in hooks if _normalize_text(item.get("name", "")) == _normalize_text(requested_hook_style)), None)
+    hook = next(
+        (
+            item
+            for item in hooks
+            if _hook_style_matches(item, requested_hook_style)
+        ),
+        None,
+    )
 
     campaign_pool = list(campaigns if campaigns is not None else [])
     campaign = candidate_campaign if campaign_is_compatible(candidate_campaign, canonical_id, configured_aliases) else None

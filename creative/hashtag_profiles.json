@@ -1,0 +1,95 @@
+{
+  "registry_version": "1",
+  "profiles": {
+    "current_default": {
+      "platform_limits": {
+        "tiktok": {"minimum": 4, "maximum": 6, "selected": 5},
+        "instagram": {"minimum": 4, "maximum": 7, "selected": 6},
+        "facebook": {"minimum": 0, "maximum": 3, "selected": 3}
+      },
+      "fallback_category": "general_prayer",
+      "category_hashtags": {
+        "general_prayer": {
+          "tiktok": ["#Prayer", "#DailyPrayer", "#ChristianEncouragement", "#Faith", "#PrayWithMe", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#Prayer", "#DailyPrayer", "#ChristianEncouragement", "#Faith", "#PrayerLife", "#PrayWithMe", "#Prayonit"],
+          "facebook": ["#Prayer", "#Faith", "#Prayonit"]
+        },
+        "morning_prayer": {
+          "tiktok": ["#MorningPrayer", "#StartYourDayWithGod", "#DailyPrayer", "#ChristianEncouragement", "#Faith", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#MorningPrayer", "#StartYourDayWithGod", "#DailyPrayer", "#ChristianEncouragement", "#Faith", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#MorningPrayer", "#DailyPrayer", "#Prayonit"]
+        },
+        "night_prayer": {
+          "tiktok": ["#NightPrayer", "#PrayerBeforeSleep", "#PeacefulPrayer", "#ChristianEncouragement", "#Faith", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#NightPrayer", "#PrayerBeforeSleep", "#PeacefulPrayer", "#ChristianEncouragement", "#Faith", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#NightPrayer", "#PeacefulPrayer", "#Prayonit"]
+        },
+        "anxiety": {
+          "tiktok": ["#AnxietyPrayer", "#PrayerForPeace", "#FaithOverFear", "#ChristianEncouragement", "#PeaceInGod", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#AnxietyPrayer", "#PrayerForPeace", "#FaithOverFear", "#ChristianEncouragement", "#PeaceInGod", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForPeace", "#FaithOverFear", "#Prayonit"]
+        },
+        "fear": {
+          "tiktok": ["#FaithOverFear", "#PrayerForPeace", "#ChristianEncouragement", "#TrustGod", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#FaithOverFear", "#PrayerForPeace", "#ChristianEncouragement", "#TrustGod", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#FaithOverFear", "#PrayerForPeace", "#Prayonit"]
+        },
+        "protection": {
+          "tiktok": ["#PrayerForProtection", "#FamilyPrayer", "#GodsProtection", "#DailyPrayer", "#Faith", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForProtection", "#FamilyPrayer", "#GodsProtection", "#DailyPrayer", "#Faith", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForProtection", "#FamilyPrayer", "#Prayonit"]
+        },
+        "bible_verse": {
+          "tiktok": ["#BibleVerse", "#Scripture", "#WordOfGod", "#ChristianEncouragement", "#Faith", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#BibleVerse", "#Scripture", "#WordOfGod", "#ChristianEncouragement", "#Faith", "#BibleStudy", "#Prayonit"],
+          "facebook": ["#BibleVerse", "#Scripture", "#Prayonit"]
+        },
+        "hope": {
+          "tiktok": ["#PrayerForHope", "#HopeInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForHope", "#HopeInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForHope", "#HopeInGod", "#Prayonit"]
+        },
+        "peace": {
+          "tiktok": ["#PrayerForPeace", "#PeaceInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForPeace", "#PeaceInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForPeace", "#PeaceInGod", "#Prayonit"]
+        },
+        "healing": {
+          "tiktok": ["#HealingPrayer", "#PrayerForHealing", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#HealingPrayer", "#PrayerForHealing", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#HealingPrayer", "#PrayerForHealing", "#Prayonit"]
+        },
+        "guidance": {
+          "tiktok": ["#PrayerForGuidance", "#TrustGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForGuidance", "#TrustGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForGuidance", "#TrustGod", "#Prayonit"]
+        },
+        "strength": {
+          "tiktok": ["#PrayerForStrength", "#StrengthInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForStrength", "#StrengthInGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#PrayerForStrength", "#StrengthInGod", "#Prayonit"]
+        },
+        "gratitude": {
+          "tiktok": ["#GratitudePrayer", "#ThankYouGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#GratitudePrayer", "#ThankYouGod", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#GratitudePrayer", "#ThankYouGod", "#Prayonit"]
+        },
+        "family": {
+          "tiktok": ["#FamilyPrayer", "#PrayForYourFamily", "#ChristianFamily", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#FamilyPrayer", "#PrayForYourFamily", "#ChristianFamily", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#FamilyPrayer", "#ChristianFamily", "#Prayonit"]
+        },
+        "devotional": {
+          "tiktok": ["#DailyDevotional", "#ChristianEncouragement", "#Faith", "#WalkWithGod", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#DailyDevotional", "#ChristianEncouragement", "#Faith", "#WalkWithGod", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#DailyDevotional", "#Faith", "#Prayonit"]
+        },
+        "forgiveness": {
+          "tiktok": ["#PrayerForForgiveness", "#GodsGrace", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#Prayonit", "#creatorsearchinsights"],
+          "instagram": ["#PrayerForForgiveness", "#GodsGrace", "#ChristianEncouragement", "#Faith", "#DailyPrayer", "#PrayerLife", "#Prayonit"],
+          "facebook": ["#GodsGrace", "#PrayerForForgiveness", "#Prayonit"]
+        }
+      }
+    }
+  }
+}

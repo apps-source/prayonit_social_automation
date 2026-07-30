@@ -91,6 +91,76 @@ ENCOURAGEMENT_STYLE_INSTRUCTION = STYLE_PROFILES["hopeful_encouragement"]["scene
 
 VALID_STYLE_PROFILES = set(STYLE_PROFILES)
 
+TTS_DELIVERY_PROFILES = {
+    "current_default": {
+        **STYLE_PROFILES["natural_conversational"],
+        "base_style_profile": "natural_conversational",
+        "temperature": None,
+    },
+    "morning_hopeful": {
+        "style": "Warm, hopeful delivery with calm forward movement.",
+        "pace": "Natural conversational pace with light forward momentum.",
+        "scene": (
+            "Speak in a warm, hopeful, conversational tone. Keep the delivery grounded and sincere, "
+            "with gentle forward movement appropriate for beginning the day. Use light emphasis and "
+            "natural pauses without sounding promotional, overly cheerful, urgent, or dramatic."
+        ),
+        "generic_context": "A grounded morning prayer or encouragement spoken with steady hope.",
+        "base_style_profile": "natural_conversational",
+        "temperature": None,
+    },
+    "evening_reflective": {
+        "style": "Soft, warm, reflective delivery with restrained energy.",
+        "pace": "Gentle pace with measured pauses.",
+        "scene": (
+            "Speak in a warm, calm, reflective tone. Use a gentle pace with measured pauses. "
+            "Keep energy low and reassuring, as though guiding someone through a peaceful evening "
+            "devotional. Avoid upbeat, promotional, urgent, sleepy, robotic, or overly dramatic delivery."
+        ),
+        "generic_context": "A peaceful evening devotional spoken with warmth and measured reflection.",
+        "base_style_profile": "natural_conversational",
+        "temperature": 0.8,
+    },
+    "anxiety_calming": {
+        "style": "Calm, steady, emotionally safe delivery.",
+        "pace": "Unhurried conversational pace with reassuring pauses.",
+        "scene": (
+            "Speak calmly and steadily, with a warm, reassuring presence. Use an unhurried pace and "
+            "natural pauses that create room to breathe. Avoid diagnosing, intensifying fear, sounding "
+            "sleepy, whispering, or promising immediate relief."
+        ),
+        "generic_context": "A calming prayer that acknowledges anxiety without escalating it.",
+        "base_style_profile": "natural_conversational",
+        "temperature": None,
+    },
+    "protection_confident": {
+        "style": "Confident, caring, and controlled prayer delivery.",
+        "pace": "Steady conversational pace with purposeful pauses.",
+        "scene": (
+            "Speak with calm confidence, warmth, and controlled conviction. Let protection language feel "
+            "caring and prayerful rather than fearful or forceful. Use purposeful pauses and restrained "
+            "emphasis. Avoid alarm, urgency, shouting, guarantees, or dramatic intensity."
+        ),
+        "generic_context": "A steady prayer for protection spoken with caring confidence.",
+        "base_style_profile": "natural_conversational",
+        "temperature": None,
+    },
+    "devotional_measured": {
+        "style": "Measured, thoughtful devotional delivery with warm clarity.",
+        "pace": "Even pace with deliberate pauses around key ideas.",
+        "scene": (
+            "Speak with warm clarity in a measured, thoughtful devotional tone. Use deliberate pauses "
+            "around key spiritual ideas while remaining natural and conversational. Avoid preaching "
+            "cadence, promotional energy, theatrical emphasis, or sounding robotic."
+        ),
+        "generic_context": "A thoughtful devotional reflection spoken with measured warmth.",
+        "base_style_profile": "natural_conversational",
+        "temperature": None,
+    },
+}
+
+VALID_TTS_DELIVERY_PROFILES = set(TTS_DELIVERY_PROFILES)
+
 
 def _get_gemini_client() -> genai.Client:
     global _gemini_client
@@ -128,6 +198,56 @@ def select_style_profile_with_reason(copy: Dict[str, Any]) -> tuple[str, str]:
         print(f"[voice_provider] Invalid voice_style_profile override: {override}; falling back safely")
 
     return "natural_conversational", "unified production narration profile"
+
+
+def select_tts_delivery_profile(
+    copy: Dict[str, Any],
+    delivery_context: Optional[Dict[str, Any]] = None,
+) -> str:
+    return select_tts_delivery_profile_with_reason(copy, delivery_context)[0]
+
+
+def select_tts_delivery_profile_with_reason(
+    copy: Dict[str, Any],
+    delivery_context: Optional[Dict[str, Any]] = None,
+) -> tuple[str, str]:
+    context = delivery_context or {}
+    override = str(
+        context.get("tts_delivery_profile_id")
+        or copy.get("tts_delivery_profile_id")
+        or getattr(config, "TTS_DELIVERY_PROFILE_OVERRIDE", "")
+    ).strip().lower()
+    if override:
+        if override in VALID_TTS_DELIVERY_PROFILES:
+            return override, "explicit TTS delivery override"
+        print(
+            "[voice_provider] Invalid TTS delivery profile override: "
+            f"{override}; falling back safely"
+        )
+
+    slot = str(context.get("slot", "")).strip().lower()
+    content_type = str(context.get("content_type", "")).strip().lower()
+    prayer_category_id = str(
+        context.get("prayer_category_id", "")
+    ).strip().lower()
+
+    if slot == "evening" and content_type == "devotional_read":
+        return "evening_reflective", "evening devotional content"
+    if content_type == "devotional_read":
+        return "devotional_measured", "devotional content type"
+    if prayer_category_id in {"anxiety", "fear"}:
+        return "anxiety_calming", "anxiety prayer category"
+    if prayer_category_id == "protection":
+        return "protection_confident", "protection prayer category"
+    if prayer_category_id in {"morning_prayer", "hope"} or (
+        slot == "morning" and content_type == "hope_encouragement"
+    ):
+        return "morning_hopeful", "hopeful morning content"
+
+    legacy_override = str(copy.get("voice_style_profile", "")).strip().lower()
+    if legacy_override and legacy_override in VALID_STYLE_PROFILES:
+        return legacy_override, "explicit manual override"
+    return "current_default", "unified production narration profile"
 
 
 def _style_profile_from_instruction(style_instruction: str) -> str:
@@ -209,16 +329,22 @@ def build_sample_context(copy: Dict[str, Any]) -> str:
     return "\n".join(context_parts[:3]).strip()
 
 
-def _resolve_voice_temperature() -> float:
+def _resolve_voice_temperature(delivery_profile_id: Optional[str] = None) -> float:
+    profile = TTS_DELIVERY_PROFILES.get(str(delivery_profile_id or ""))
+    profile_temperature = profile.get("temperature") if profile else None
     try:
-        value = float(getattr(config, "VOICE_TEMPERATURE", 1.0))
+        value = float(
+            profile_temperature
+            if profile_temperature is not None
+            else getattr(config, "VOICE_TEMPERATURE", 1.0)
+        )
     except (TypeError, ValueError):
         value = 1.0
     return max(0.0, min(2.0, value))
 
 
 def build_tts_prompt(text: str, style_profile: str, copy: Optional[Dict[str, Any]] = None) -> str:
-    profile = STYLE_PROFILES[style_profile]
+    profile = TTS_DELIVERY_PROFILES.get(style_profile) or STYLE_PROFILES[style_profile]
     sample_context = build_sample_context(copy or {})
     transcript = text.strip()
     return (
@@ -334,18 +460,29 @@ def _generate_with_gemini(
     *,
     copy: Optional[Dict[str, Any]] = None,
     model_name: Optional[str] = None,
+    delivery_context: Optional[Dict[str, Any]] = None,
 ) -> Path:
     if copy:
-        style_profile, selection_reason = select_style_profile_with_reason(copy)
+        delivery_profile, selection_reason = (
+            select_tts_delivery_profile_with_reason(copy, delivery_context)
+        )
     else:
-        style_profile = _style_profile_from_instruction(style_instruction)
+        delivery_profile = _style_profile_from_instruction(style_instruction)
         selection_reason = "style instruction"
     if copy is not None:
         validate_narration_transcript(build_narration_segments(copy), text)
-    prompt = build_tts_prompt(text, style_profile, copy)
-    temperature = _resolve_voice_temperature()
+    prompt = build_tts_prompt(text, delivery_profile, copy)
+    temperature = _resolve_voice_temperature(delivery_profile)
+    profile = (
+        TTS_DELIVERY_PROFILES.get(delivery_profile)
+        or STYLE_PROFILES[delivery_profile]
+    )
     print(f"Gemini TTS voice: {voice_name}")
-    print(f"Gemini TTS style profile: {style_profile}")
+    print(
+        "Gemini TTS style profile: "
+        f"{profile.get('base_style_profile', delivery_profile)}"
+    )
+    print(f"Gemini TTS delivery profile: {delivery_profile}")
     print(f"Style selection reason: {selection_reason}")
     print(f"Gemini TTS temperature: {temperature:g}")
     if config.PREVIEW_MODE:
@@ -412,6 +549,7 @@ def generate_voiceover(
     output_path: Path,
     *,
     copy: Optional[Dict[str, Any]] = None,
+    delivery_context: Optional[Dict[str, Any]] = None,
     provider: Optional[str] = None,
     fallback_enabled: Optional[bool] = None,
 ) -> Optional[Path]:
@@ -454,13 +592,18 @@ def generate_voiceover(
     for model_name in model_sequence:
         for attempt in range(1, attempts + 1):
             try:
+                gemini_kwargs: Dict[str, Any] = {
+                    "copy": copy,
+                    "model_name": model_name,
+                }
+                if delivery_context is not None:
+                    gemini_kwargs["delivery_context"] = delivery_context
                 return _generate_with_gemini(
                     text,
                     voice_name,
                     style_instruction,
                     output_path,
-                    copy=copy,
-                    model_name=model_name,
+                    **gemini_kwargs,
                 )
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc

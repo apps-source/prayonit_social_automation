@@ -1,0 +1,140 @@
+{
+  "policy_version": "1",
+  "short_video_clip_count": 5,
+  "long_video_clip_count": 6,
+  "long_video_threshold_seconds": 42,
+  "max_preferred_stretch_ratio": 1.4,
+  "assumed_source_duration_seconds": 8.0,
+  "avoid_same_visual_family": true,
+  "exclude_same_duplicate_group": true,
+  "max_water_clips": 3,
+  "recent_use_window": 10,
+  "scoring_weights": {
+    "category_affinity": 14,
+    "emotional_affinity": 7,
+    "time_of_day": 9,
+    "energy_level": 5,
+    "scene_type": 4,
+    "broad_usability": 2,
+    "neutral_metadata": 1,
+    "people_preference": 4,
+    "people_distraction_penalty": -2,
+    "recent_use_penalty": -10,
+    "adjacent_scene_penalty": -4,
+    "visual_family_reuse_penalty": -8
+  },
+  "scene_profiles": {
+    "current_default": {
+      "preferred_scene_types": [],
+      "preferred_emotions": [],
+      "preferred_energy_levels": ["low", "medium"]
+    }
+  },
+  "category_profiles": {
+    "morning_prayer": {
+      "preferred_scene_types": ["field", "mountains", "lake", "path", "home", "people"],
+      "preferred_times": ["morning", "day", "neutral"],
+      "preferred_emotions": ["hopeful", "uplifting", "peaceful"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    },
+    "night_prayer": {
+      "preferred_scene_types": ["ocean", "lake", "home", "clouds", "abstract_nature"],
+      "preferred_times": ["night", "evening", "sunset", "neutral"],
+      "preferred_emotions": ["peaceful", "calming", "reflective"],
+      "preferred_energy_levels": ["low"],
+      "people_preference": "allowed"
+    },
+    "anxiety": {
+      "preferred_scene_types": ["ocean", "lake", "river", "forest", "path", "waterfall"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["calming", "peaceful", "reflective", "comforting"],
+      "preferred_energy_levels": ["low"],
+      "people_preference": "discouraged"
+    },
+    "fear": {
+      "preferred_scene_types": ["ocean", "lake", "river", "forest", "path"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["calming", "peaceful", "reflective", "comforting"],
+      "preferred_energy_levels": ["low"],
+      "people_preference": "discouraged"
+    },
+    "protection": {
+      "preferred_scene_types": ["mountains", "home", "people", "clouds", "field"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["strong", "protective", "hopeful", "comforting"],
+      "preferred_energy_levels": ["medium"],
+      "people_preference": "preferred"
+    },
+    "healing": {
+      "preferred_scene_types": ["forest", "field", "lake", "river", "home"],
+      "preferred_times": ["neutral", "morning", "day", "sunset"],
+      "preferred_emotions": ["comforting", "peaceful", "hopeful", "calming"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    },
+    "guidance": {
+      "preferred_scene_types": ["path", "mountains", "field", "city"],
+      "preferred_times": ["morning", "day", "neutral"],
+      "preferred_emotions": ["hopeful", "reflective", "strong"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    },
+    "strength": {
+      "preferred_scene_types": ["mountains", "waterfall", "ocean", "field"],
+      "preferred_times": ["neutral", "morning", "day", "sunset"],
+      "preferred_emotions": ["strong", "uplifting", "hopeful"],
+      "preferred_energy_levels": ["medium"],
+      "people_preference": "allowed"
+    },
+    "gratitude": {
+      "preferred_scene_types": ["field", "forest", "lake", "ocean", "clouds"],
+      "preferred_times": ["sunset", "morning", "day", "neutral"],
+      "preferred_emotions": ["uplifting", "hopeful", "peaceful"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    },
+    "family": {
+      "preferred_scene_types": ["home", "people", "field", "forest", "lake"],
+      "preferred_times": ["neutral", "morning", "day", "evening"],
+      "preferred_emotions": ["comforting", "peaceful", "hopeful"],
+      "preferred_energy_levels": ["low"],
+      "people_preference": "preferred"
+    },
+    "bible_verse": {
+      "preferred_scene_types": ["mountains", "forest", "lake", "clouds", "abstract_nature"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["reflective", "peaceful", "neutral"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "discouraged"
+    },
+    "devotional": {
+      "preferred_scene_types": ["mountains", "forest", "lake", "clouds", "field"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["reflective", "peaceful", "hopeful"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "discouraged"
+    },
+    "hope": {
+      "preferred_scene_types": ["field", "mountains", "lake", "clouds", "ocean"],
+      "preferred_times": ["morning", "day", "sunset", "neutral"],
+      "preferred_emotions": ["hopeful", "uplifting", "peaceful"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    },
+    "peace": {
+      "preferred_scene_types": ["ocean", "lake", "river", "forest", "clouds"],
+      "preferred_times": ["neutral", "morning", "day", "evening", "night"],
+      "preferred_emotions": ["peaceful", "calming", "reflective"],
+      "preferred_energy_levels": ["low"],
+      "people_preference": "discouraged"
+    },
+    "general_prayer": {
+      "preferred_scene_types": [],
+      "preferred_times": ["neutral", "morning", "day", "sunset", "evening", "night"],
+      "preferred_emotions": ["peaceful", "hopeful", "reflective", "calming", "neutral"],
+      "preferred_energy_levels": ["low", "medium"],
+      "people_preference": "allowed"
+    }
+  }
+}

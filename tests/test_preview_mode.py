@@ -145,7 +145,7 @@ def test_preview_mode_uses_generate_ad_copy(isolated_database, monkeypatch, caps
     assert "PREVIEW_MODE=true, so nothing was uploaded or posted." in out
 
 
-def test_caption_profile_override_is_available_only_in_preview_or_test(monkeypatch):
+def test_explicit_caption_profile_override_is_available_in_production(monkeypatch):
     monkeypatch.setattr(
         prayonit_social.config,
         "CAPTION_PROFILE_PREVIEW_OVERRIDE",
@@ -153,13 +153,34 @@ def test_caption_profile_override_is_available_only_in_preview_or_test(monkeypat
     )
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
     monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", False)
-    assert prayonit_social._caption_profile_preview_override() is None
-
-    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", True)
     assert (
         prayonit_social._caption_profile_preview_override()
         == "rolling_short"
     )
+
+
+def test_blank_caption_profile_override_preserves_production_default(monkeypatch):
+    monkeypatch.setattr(
+        prayonit_social.config,
+        "CAPTION_PROFILE_PREVIEW_OVERRIDE",
+        "",
+    )
+    monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", False)
+    assert prayonit_social._caption_profile_preview_override() is None
+
+
+def test_run_schedule_uses_eastern_weekday_at_utc_boundary():
+    started, content = prayonit_social._resolve_run_weekly_content(
+        "evening",
+        now=prayonit_social.datetime(
+            2026, 7, 30, 3, 1, tzinfo=prayonit_social.timezone.utc
+        ),
+    )
+    assert started.isoformat() == "2026-07-30T03:01:00+00:00"
+    assert content["content_type"] == "devotional_read"
+    assert content["prayer_category_id"] == "devotional"
+    assert content["video_template"] == "long_devotional"
 
 
 def test_preview_mode_never_reaches_upload_logic(isolated_database, monkeypatch, capsys):

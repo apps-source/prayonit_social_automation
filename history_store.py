@@ -272,6 +272,97 @@ def update_run_record(
         conn.execute(f"UPDATE campaigns_used SET {set_clause} WHERE id = ?", values)
 
 
+def merge_run_resolved_brief_metadata(
+    run_row_id: int,
+    metadata: Dict[str, Any],
+) -> None:
+    """Merge additive orchestration metadata into the existing run JSON."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT resolved_brief_json FROM campaigns_used WHERE id = ?",
+            (run_row_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Unknown campaign run row: {run_row_id}")
+        existing: Dict[str, Any] = {}
+        raw = row["resolved_brief_json"]
+        if raw:
+            try:
+                decoded = json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                decoded = {}
+            if isinstance(decoded, dict):
+                existing = decoded
+        existing.update(metadata)
+        conn.execute(
+            "UPDATE campaigns_used SET resolved_brief_json = ? WHERE id = ?",
+            (json.dumps(existing), run_row_id),
+        )
+
+
+def get_run_resolved_brief_metadata(run_row_id: int) -> Dict[str, Any]:
+    """Return one run's additive JSON metadata without exposing other rows."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT resolved_brief_json FROM campaigns_used WHERE id = ?",
+            (run_row_id,),
+        ).fetchone()
+    if row is None or not row["resolved_brief_json"]:
+        return {}
+    try:
+        payload = json.loads(row["resolved_brief_json"])
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def get_recent_scenic_asset_ids(
+    *,
+    limit_runs: int = 10,
+    exclude_statuses: Optional[Iterable[str]] = None,
+) -> List[str]:
+    """Read prior scenic selections from existing run JSON, newest first."""
+    if limit_runs <= 0:
+        return []
+    params: List[Any] = []
+    sql = (
+        "SELECT resolved_brief_json FROM campaigns_used "
+        "WHERE resolved_brief_json IS NOT NULL"
+    )
+    statuses = list(exclude_statuses or ())
+    if statuses:
+        placeholders = ",".join("?" for _ in statuses)
+        sql += f" AND status NOT IN ({placeholders})"
+        params.extend(statuses)
+    sql += " ORDER BY created_at_utc DESC, id DESC LIMIT ?"
+    params.append(limit_runs)
+
+    seen: set[str] = set()
+    recent_ids: List[str] = []
+    with _connect() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    for row in rows:
+        try:
+            payload = json.loads(row["resolved_brief_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        assets = payload.get("selected_scenic_assets", [])
+        if not isinstance(assets, list):
+            continue
+        for asset in assets:
+            asset_id = (
+                str(asset.get("asset_id", "")).strip()
+                if isinstance(asset, dict)
+                else ""
+            )
+            if asset_id and asset_id not in seen:
+                seen.add(asset_id)
+                recent_ids.append(asset_id)
+    return recent_ids
+
+
 def save_published_post(
     *,
     run_id: str,
@@ -371,6 +462,23 @@ def get_platform_delivery_state(
             SELECT * FROM published_posts
             WHERE run_id = ? AND platform = ? AND post_type = ?
             ORDER BY id DESC LIMIT 1
+            """,
+            (run_id, platform, post_type),
+        ).fetchone()
+
+
+def get_successful_platform_delivery_state(
+    *, run_id: str, platform: str, post_type: str
+) -> Optional[sqlite3.Row]:
+    """Return any successful delivery so retries cannot duplicate it."""
+    with _connect() as conn:
+        return conn.execute(
+            """
+            SELECT * FROM published_posts
+            WHERE run_id = ? AND platform = ? AND post_type = ?
+              AND buffer_status = 'scheduled'
+              AND buffer_post_id IS NOT NULL
+            ORDER BY id ASC LIMIT 1
             """,
             (run_id, platform, post_type),
         ).fetchone()

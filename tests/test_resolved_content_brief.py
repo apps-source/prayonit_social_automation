@@ -6,6 +6,7 @@ import config
 import history_store
 import prayonit_social
 import prompt_builder
+import pytest
 import resolved_content_brief
 
 
@@ -479,14 +480,16 @@ def test_category_and_global_profile_defaults_resolve_deterministically():
         category_override, custom_registry
     )
     assert resolved["hook_profile_id"] == "category_hook"
+    assert resolved["body_profile_id"] == "current_default"
     assert resolved["caption_profile_id"] == "current_default"
 
 
 def test_policy_version_and_all_profile_ids_are_captured():
     brief = _resolve()
     assert brief.creative_policy_version == "1"
-    assert brief.hook_profile_id == "current_default"
+    assert brief.hook_profile_id == "gentle_invitation"
     assert brief.voice_profile_id == "natural_conversational"
+    assert brief.body_profile_id == "general_prayer"
     assert brief.caption_profile_id == "current_default"
     assert brief.scene_profile_id == "current_default"
     assert brief.cta_profile_id == "current_default"
@@ -517,11 +520,254 @@ def test_unknown_caption_profile_lookup_fails_safely():
 
 
 def test_caption_profile_lookup_respects_creative_policy_version():
-    with pytest.raises(RuntimeError, match="Creative policy version mismatch"):
+    with pytest.raises(RuntimeError, match="does not match the active creative policy"):
         resolved_content_brief.get_caption_profile_definition(
             "rolling_short",
             creative_policy_version="999",
         )
+
+
+def test_hook_writing_and_body_profile_lookup_uses_active_policy():
+    hook = resolved_content_brief.get_hook_profile_definition(
+        "empathetic_recognition",
+        creative_policy_version="1",
+    )
+    writing = resolved_content_brief.get_writing_profile_definition(
+        "gentle_encouraging",
+        creative_policy_version="1",
+    )
+    body = resolved_content_brief.get_body_profile_definition(
+        "anxiety_relief",
+        creative_policy_version="1",
+    )
+    assert hook["writing_guidance"]
+    assert writing["purpose"] == "content_writing_only"
+    assert "voice_style_profile" not in writing
+    assert body["petition_focus"]
+
+
+def test_unknown_hook_writing_and_body_profiles_fail_safely():
+    with pytest.raises(RuntimeError, match="Unknown hook profile"):
+        resolved_content_brief.get_hook_profile_definition("missing")
+    with pytest.raises(RuntimeError, match="Unknown writing profile"):
+        resolved_content_brief.get_writing_profile_definition("missing")
+    with pytest.raises(RuntimeError, match="Unknown body profile"):
+        resolved_content_brief.get_body_profile_definition("missing")
+
+
+def test_category_hook_writing_and_body_defaults_are_compatible():
+    for category in resolved_content_brief.load_prayer_categories():
+        hook_id = category["default_profiles"].get("hook_profile_id")
+        writing_id = category["default_profiles"].get("voice_profile_id")
+        body_id = category["default_profiles"].get("body_profile_id")
+        if not hook_id or not writing_id or not body_id:
+            continue
+        hook = resolved_content_brief.get_hook_profile_definition(hook_id)
+        writing = resolved_content_brief.get_writing_profile_definition(writing_id)
+        body = resolved_content_brief.get_body_profile_definition(body_id)
+        assert (
+            "any" in hook["compatible_categories"]
+            or category["id"] in hook["compatible_categories"]
+        )
+        assert (
+            "any" in writing["compatible_categories"]
+            or category["id"] in writing["compatible_categories"]
+        )
+        assert (
+            "any" in body["compatible_categories"]
+            or category["id"] in body["compatible_categories"]
+        )
+
+
+def test_resolver_owns_category_profile_selection():
+    weekly = _weekly(
+        content_type="prayer_read",
+        video_template="long_prayer",
+        prayer_category_id="morning_prayer",
+    )
+    brief = _resolve(weekly_content=weekly)
+    assert brief.hook_profile_id == "hopeful_encouragement"
+    assert brief.voice_profile_id == "natural_conversational"
+    assert brief.body_profile_id == "morning_direction"
+
+
+def test_general_prayer_uses_safe_hook_and_neutral_writing_profiles():
+    brief = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            prayer_category_id="general_prayer",
+        )
+    )
+    assert brief.prayer_category_id == "general_prayer"
+    assert brief.hook_profile_id == "gentle_invitation"
+    assert brief.voice_profile_id == "natural_conversational"
+    assert brief.body_profile_id == "general_prayer"
+
+
+def test_category_profile_mappings_remain_explicit_and_stable():
+    actual = {
+        category["id"]: (
+            category["default_profiles"]["hook_profile_id"],
+            category["default_profiles"]["voice_profile_id"],
+            category["default_profiles"]["body_profile_id"],
+        )
+        for category in resolved_content_brief.load_prayer_categories()
+    }
+    assert actual == {
+        "morning_prayer": ("hopeful_encouragement", "natural_conversational", "morning_direction"),
+        "night_prayer": ("gentle_invitation", "calm_reflective", "night_release"),
+        "hope": ("hopeful_encouragement", "gentle_encouraging", "hope_and_encouragement"),
+        "peace": ("quiet_reflection", "calm_reflective", "peace_and_rest"),
+        "anxiety": ("empathetic_recognition", "gentle_encouraging", "anxiety_relief"),
+        "fear": ("empathetic_recognition", "gentle_encouraging", "anxiety_relief"),
+        "healing": ("empathetic_recognition", "calm_reflective", "healing_and_comfort"),
+        "protection": ("protective_intercession", "gentle_encouraging", "protection_and_covering"),
+        "forgiveness": ("quiet_reflection", "calm_reflective", "forgiveness_and_restoration"),
+        "guidance": ("curiosity", "natural_conversational", "guidance_and_decisions"),
+        "strength": ("hopeful_encouragement", "gentle_encouraging", "strength_and_perseverance"),
+        "gratitude": ("quiet_reflection", "calm_reflective", "gratitude_and_praise"),
+        "family": ("protective_intercession", "gentle_encouraging", "family_and_relationships"),
+        "bible_verse": ("scripture_first", "scripture_reader", "scripture_centered"),
+        "devotional": ("curiosity", "natural_conversational", "devotional_reflection"),
+        "general_prayer": ("gentle_invitation", "natural_conversational", "general_prayer"),
+    }
+
+
+def test_key_categories_resolve_distinct_body_profiles():
+    anxiety = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            prayer_category_id="anxiety",
+        )
+    )
+    protection = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            prayer_category_id="protection",
+        )
+    )
+    morning = _resolve(
+        weekly_content=_weekly(
+            content_type="prayer_read",
+            video_template="long_prayer",
+            prayer_category_id="morning_prayer",
+        )
+    )
+    night = _resolve(
+        slot="evening",
+        weekly_content=_weekly(
+            content_type="night_prayer_or_rest",
+            video_template="long_prayer",
+            prayer_category_id="night_prayer",
+        ),
+    )
+    bible = _resolve(
+        weekly_content=_weekly(
+            content_type="devotional_read",
+            video_template="long_devotional",
+            prayer_category_id="bible_verse",
+        )
+    )
+
+    assert anxiety.body_profile_id == "anxiety_relief"
+    assert protection.body_profile_id == "protection_and_covering"
+    assert anxiety.body_profile_id != protection.body_profile_id
+    assert morning.body_profile_id == "morning_direction"
+    assert night.body_profile_id == "night_release"
+    assert morning.body_profile_id != night.body_profile_id
+    assert bible.body_profile_id == "scripture_centered"
+
+
+def test_legacy_empathy_hook_style_is_resolved_in_canonical_brief():
+    weekly = {**_weekly(), "hook_style": "empathy"}
+    brief = _resolve(
+        weekly_content=weekly,
+        hook_styles=resolved_content_brief.content_engine.load_hook_styles(),
+    )
+    assert brief.hook_style_id == "recognition"
+    assert brief.hook_style_label == "Recognition"
+
+
+def test_incompatible_hook_and_writing_profiles_are_critical():
+    incompatible = replace(
+        _resolve(),
+        hook_profile_id="scripture_first",
+        voice_profile_id="calm_reflective",
+    )
+    report = resolved_content_brief.validate_resolved_content_brief(incompatible)
+    assert any(
+        item["field"] == "hook_profile_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+    assert any(
+        item["field"] == "voice_profile_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+
+
+def test_missing_profile_definition_fields_are_critical(monkeypatch):
+    brief = _resolve()
+    registry = json.loads(
+        json.dumps(resolved_content_brief.load_creative_profile_registry())
+    )
+    registry["hook_profiles"]["gentle_invitation"].pop("compatible_categories")
+    monkeypatch.setattr(
+        resolved_content_brief,
+        "load_creative_profile_registry",
+        lambda: registry,
+    )
+    report = resolved_content_brief.validate_resolved_content_brief(brief)
+    assert any(
+        item["field"] == "hook_profile_id"
+        and item["status"] == "critical failure"
+        and "incomplete" in item["message"].lower()
+        for item in report
+    )
+
+
+def test_missing_body_profile_structured_field_is_critical(monkeypatch):
+    brief = _resolve()
+    registry = json.loads(
+        json.dumps(resolved_content_brief.load_creative_profile_registry())
+    )
+    registry["body_profiles"]["general_prayer"].pop("petition_focus")
+    monkeypatch.setattr(
+        resolved_content_brief,
+        "load_creative_profile_registry",
+        lambda: registry,
+    )
+    report = resolved_content_brief.validate_resolved_content_brief(brief)
+    assert any(
+        item["field"] == "body_profile_id"
+        and item["status"] == "critical failure"
+        and "incomplete" in item["message"].lower()
+        for item in report
+    )
+
+
+def test_incompatible_body_profile_is_critical():
+    invalid = replace(_resolve(), body_profile_id="scripture_centered")
+    report = resolved_content_brief.validate_resolved_content_brief(invalid)
+    assert any(
+        item["field"] == "body_profile_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
+
+
+def test_unknown_body_profile_id_is_critical():
+    invalid = replace(_resolve(), body_profile_id="missing_body_profile")
+    report = resolved_content_brief.validate_resolved_content_brief(invalid)
+    assert any(
+        item["field"] == "body_profile_id"
+        and item["status"] == "critical failure"
+        for item in report
+    )
 
 
 def test_explicit_weekly_categories_are_compatible_with_their_slots_and_types():
@@ -597,6 +843,7 @@ def test_legacy_brief_construction_uses_safe_creative_defaults():
         "prayer_category_id",
         "hook_profile_id",
         "voice_profile_id",
+        "body_profile_id",
         "caption_profile_id",
         "scene_profile_id",
         "cta_profile_id",
@@ -608,6 +855,7 @@ def test_legacy_brief_construction_uses_safe_creative_defaults():
     legacy = resolved_content_brief.ResolvedContentBrief(**current)
     assert legacy.prayer_category_id == "general_prayer"
     assert legacy.voice_profile_id == "natural_conversational"
+    assert legacy.body_profile_id == "current_default"
     assert legacy.creative_policy_version == "1"
 
 
@@ -616,7 +864,8 @@ def test_history_serialization_includes_creative_resolution_fields():
     serialized = json.dumps(payload)
     restored = json.loads(serialized)
     assert restored["prayer_category_id"]
-    assert restored["hook_profile_id"] == "current_default"
+    assert restored["hook_profile_id"] == "gentle_invitation"
+    assert restored["body_profile_id"] == "general_prayer"
     assert restored["creative_policy_version"] == "1"
     assert "default_profiles" not in restored
 
@@ -625,12 +874,14 @@ def test_prompt_context_reads_resolved_profiles_without_reselecting_them():
     brief = replace(
         _resolve(),
         hook_profile_id="resolver_owned_hook",
+        body_profile_id="resolver_owned_body",
         caption_profile_id="resolver_owned_caption",
     )
     creative_context = prompt_builder.build_creative_brief_data(
         "morning", resolved_brief=brief
     )
     assert creative_context["hook_profile_id"] == "resolver_owned_hook"
+    assert creative_context["body_profile_id"] == "resolver_owned_body"
     assert creative_context["caption_profile_id"] == "resolver_owned_caption"
     assert creative_context["prayer_category_id"] == brief.prayer_category_id
 

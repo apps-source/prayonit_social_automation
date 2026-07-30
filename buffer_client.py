@@ -59,7 +59,7 @@ def _headers() -> Dict[str, str]:
     }
 
 
-def buffer_create_post(
+def build_create_post_input(
     *,
     channel_id: str,
     caption: str,
@@ -69,30 +69,15 @@ def buffer_create_post(
     image_url: Optional[str] = None,
     video_url: Optional[str] = None,
     link: Optional[str] = None,
+    platform_options: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Create a single Buffer post. Raises on any failure.
-
-    Exactly one of image_url / video_url must be provided. image_url is
-    used for Feed/Story image posts (unchanged behavior). video_url is used
-    for Facebook Reel, Instagram Reel, and TikTok video posts (Phase 2A):
-    per the live Buffer GraphQL schema (introspected via
-    discover_buffer_metrics_schema(), see data/buffer_metrics_schema.json),
-    CreatePostInput.assets accepts [AssetInput!]!, and AssetInput has both
-    an "image: ImageAssetInput" field ({url, thumbnailUrl, metadata}) and a
-    "video: VideoAssetInput" field ({url, thumbnailUrl, metadata}) -- the
-    same createPost mutation is reused for video, only the asset shape
-    changes.
-
-    link: the exact destination URL for this platform item (tracked URL when
-    TRACKING_ENABLED=true, otherwise DEFAULT_DESTINATION_URL), as returned by
-    tracking.create_tracked_link(). Only used for Instagram feed posts
-    (metadata.instagram.link); ignored for Instagram Stories, Reels, and all
-    other services/post types.
-    """
+    """Build one schema-conservative Buffer CreatePostInput value."""
     if bool(image_url) == bool(video_url):
-        raise ValueError("buffer_create_post requires exactly one of image_url or video_url.")
+        raise ValueError(
+            "buffer_create_post requires exactly one of image_url or video_url."
+        )
 
-    input_data: Dict[str, Any] = {
+    input_data = {
         "text": caption,
         "channelId": channel_id,
         "schedulingType": "automatic",
@@ -130,7 +115,57 @@ def buffer_create_post(
         # TikTokPostMetadataInput (confirmed via schema introspection) has
         # only "title" and "isAiGenerated" fields -- no "type" enum, since
         # TikTok channels only accept video posts.
-        input_data["metadata"] = {"tiktok": {"isAiGenerated": True}}
+        options = dict(platform_options or {})
+        unsupported = set(options) - {"title", "isAiGenerated"}
+        if unsupported:
+            raise ValueError(
+                "Unsupported TikTok Buffer options: "
+                + ", ".join(sorted(unsupported))
+            )
+        if options.get("isAiGenerated", True) is not True:
+            raise ValueError(
+                "TikTok isAiGenerated must remain enabled for Prayonit posts."
+            )
+        tiktok_metadata: Dict[str, Any] = {"isAiGenerated": True}
+        title = str(options.get("title", "")).strip()
+        if title:
+            tiktok_metadata["title"] = title
+        input_data["metadata"] = {"tiktok": tiktok_metadata}
+    elif platform_options:
+        raise ValueError(
+            f"Platform options are not supported for {service}/{post_type}."
+        )
+    return input_data
+
+
+def buffer_create_post(
+    *,
+    channel_id: str,
+    caption: str,
+    service: str,
+    post_type: str,
+    due_at_iso: str,
+    image_url: Optional[str] = None,
+    video_url: Optional[str] = None,
+    link: Optional[str] = None,
+    platform_options: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Create a single Buffer post. Raises on any failure.
+
+    Exactly one of image_url / video_url must be provided. The pure payload
+    builder above keeps schema validation testable without a network call.
+    """
+    input_data = build_create_post_input(
+        channel_id=channel_id,
+        caption=caption,
+        service=service,
+        post_type=post_type,
+        due_at_iso=due_at_iso,
+        image_url=image_url,
+        video_url=video_url,
+        link=link,
+        platform_options=platform_options,
+    )
 
     response = requests.post(
         config.BUFFER_ENDPOINT,

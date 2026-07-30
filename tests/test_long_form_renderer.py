@@ -242,12 +242,80 @@ def test_phrase_timing_has_no_drift_across_parent_units():
         long_form_renderer.TextCard("Amen.", 10.75, 11.5, "closing_line"),
     ]
     transformed = long_form_renderer.apply_caption_profile(parents, profile)
-    assert transformed[0].start == 2.5
+    assert transformed[0].start == 3.0
     assert transformed[-1].end == 11.5
-    assert any(card.end == 6.25 for card in transformed)
-    assert any(card.start == 6.25 for card in transformed)
-    assert any(card.end == 10.75 for card in transformed)
-    assert any(card.start == 10.75 for card in transformed)
+    assert all(
+        current.end <= following.start
+        for current, following in zip(transformed, transformed[1:])
+    )
+
+
+def test_rolling_timing_delays_body_and_extends_phrase_visibility():
+    profile = _rolling_profile()
+    hook = long_form_renderer.TextCard(
+        "Begin with hope.", 0.0, 2.5, "opening_hook"
+    )
+    parent = long_form_renderer.TextCard(
+        "God is near and He will guide your next faithful step.",
+        2.5,
+        8.5,
+        "script_segment",
+    )
+    phrases = long_form_renderer.group_caption_phrases(parent.text, profile)
+    before = long_form_renderer.allocate_phrase_timing(
+        parent, phrases, profile
+    )
+    after = long_form_renderer.apply_caption_profile([hook, parent], profile)
+    rolling = after[1:]
+
+    assert rolling[0].start == pytest.approx(before[0].start + 0.5)
+    assert rolling[0].end == pytest.approx(before[0].end + 0.35)
+    assert rolling[0].end > before[0].end
+
+
+def test_rolling_timing_never_overlaps_adjacent_cards():
+    profile = _rolling_profile()
+    parents = [
+        long_form_renderer.TextCard(
+            "God is near and He will guide every step.",
+            2.5,
+            7.0,
+            "bridge_line",
+        ),
+        long_form_renderer.TextCard(
+            "Trust Him with the path before you today.",
+            7.0,
+            11.5,
+            "script_segment",
+        ),
+    ]
+    cards = long_form_renderer.apply_caption_profile(parents, profile)
+
+    assert all(
+        current.end <= following.start
+        for current, following in zip(cards, cards[1:])
+    )
+
+
+def test_rolling_timing_leaves_opening_hook_unchanged():
+    profile = _rolling_profile()
+    hook = long_form_renderer.TextCard(
+        "Begin with hope.", 0.0, 2.5, "opening_hook"
+    )
+    body = long_form_renderer.TextCard(
+        "God is near and He will guide every step.",
+        2.5,
+        7.0,
+        "bridge_line",
+    )
+
+    transformed = long_form_renderer.apply_caption_profile(
+        [hook, body], profile
+    )
+
+    assert transformed[0] is hook
+    assert transformed[0].start == 0.0
+    assert transformed[0].end == 2.5
 
 
 def test_current_default_caption_profile_is_a_true_no_op():
@@ -259,6 +327,8 @@ def test_current_default_caption_profile_is_a_true_no_op():
         resolved_content_brief.get_caption_profile_definition("current_default"),
     )
     assert result is cards
+    assert result[0].start == 1.0
+    assert result[0].end == 4.0
 
 
 def test_rolling_profile_expands_only_eligible_narrated_body_cards():
@@ -1096,15 +1166,28 @@ def test_preview_mode_saves_long_form_video_locally_without_publishing(isolated_
     monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", True)
     monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", True)
     monkeypatch.setattr(
+        prayonit_social.config,
+        "CAPTION_PROFILE_PREVIEW_OVERRIDE",
+        "rolling_short",
+    )
+    monkeypatch.setattr(
         prayonit_social.content_engine,
         "get_todays_content",
         lambda slot, now=None, weekly_rhythm=None: {**_presentation(video_template="long_encouragement", content_type="hope_encouragement"), "theme": "hope", "emotion": "tired", "hook_style": "recognition", "objective": "obj"},
     )
     monkeypatch.setattr(prayonit_social.prompt_builder, "generate_ad_copy", lambda **kwargs: _long_copy(long_form_type="encouragement", closing_line="You can keep going."))
-    saved = {"path": None}
+    saved = {
+        "path": None,
+        "caption_profile_id": None,
+        "creative_policy_version": None,
+        "video_assets": None,
+    }
 
     def fake_render_long_form_video(**kwargs):
         saved["path"] = Path(kwargs["output_path"])
+        saved["caption_profile_id"] = kwargs["caption_profile_id"]
+        saved["creative_policy_version"] = kwargs["creative_policy_version"]
+        saved["video_assets"] = kwargs["video_assets"]
         saved["path"].write_bytes(b"x")
         return saved["path"]
 
@@ -1114,3 +1197,6 @@ def test_preview_mode_saves_long_form_video_locally_without_publishing(isolated_
     assert result == 0
     assert saved["path"] is not None
     assert "output/videos/long" in str(saved["path"])
+    assert saved["caption_profile_id"] == "rolling_short"
+    assert saved["creative_policy_version"] == "1"
+    assert saved["video_assets"]

@@ -1,4 +1,6 @@
 """Tests for history_store.py (SQLite initialization, run/post recording)."""
+import json
+
 import history_store
 
 
@@ -25,6 +27,101 @@ def test_create_and_update_run_record():
     assert len(rows) == 1
     assert rows[0]["headline"] == "Test Headline"
     assert rows[0]["status"] == "published"
+
+
+def test_scenic_asset_metadata_merges_into_existing_run_json():
+    history_store.initialize_database()
+    row_id = history_store.create_run_record(
+        run_id="run-scenic",
+        slot="morning",
+        campaign_name="Hope",
+        resolved_brief={"prayer_category_id": "hope"},
+        status="in_progress",
+    )
+    history_store.merge_run_resolved_brief_metadata(
+        row_id,
+        {
+            "selected_scenic_assets": [
+                {
+                    "asset_id": "sunrise-1",
+                    "filename": "sunrise.mp4",
+                    "visual_family": "sunrise",
+                    "duplicate_group": None,
+                    "selection_order": 1,
+                    "selection_score": 42,
+                }
+            ]
+        },
+    )
+    row = history_store.get_recent_campaign_history(days=1)[0]
+    payload = json.loads(row["resolved_brief_json"])
+    assert payload["prayer_category_id"] == "hope"
+    assert payload["selected_scenic_assets"][0]["asset_id"] == "sunrise-1"
+
+
+def test_recent_scenic_asset_ids_ignore_dry_runs_and_malformed_json():
+    history_store.initialize_database()
+    production_id = history_store.create_run_record(
+        run_id="run-production",
+        slot="morning",
+        campaign_name="Hope",
+        resolved_brief={},
+        status="published",
+    )
+    history_store.merge_run_resolved_brief_metadata(
+        production_id,
+        {"selected_scenic_assets": [{"asset_id": "production-asset"}]},
+    )
+    dry_id = history_store.create_run_record(
+        run_id="run-preview",
+        slot="morning",
+        campaign_name="Hope",
+        resolved_brief={},
+        status="dry_run",
+    )
+    history_store.merge_run_resolved_brief_metadata(
+        dry_id,
+        {"selected_scenic_assets": [{"asset_id": "preview-asset"}]},
+    )
+    assert history_store.get_recent_scenic_asset_ids(
+        limit_runs=10,
+        exclude_statuses=("dry_run",),
+    ) == ["production-asset"]
+
+
+def test_successful_delivery_lookup_ignores_later_failed_attempt():
+    history_store.initialize_database()
+    history_store.save_published_post(
+        run_id="retry-safe",
+        scheduled_at_utc="2026-07-10T13:00:00Z",
+        platform="facebook",
+        post_type="reel",
+        buffer_post_id="original-buffer-id",
+        campaign_name="Hope",
+        formula_name=None,
+        persona_name=None,
+        slot="morning",
+        headline="H",
+        caption="C",
+        tracked_url=None,
+        image_url="https://cdn.example/video.mp4",
+    )
+    history_store.save_post_error(
+        run_id="retry-safe",
+        platform="facebook",
+        post_type="reel",
+        campaign_name="Hope",
+        formula_name=None,
+        persona_name=None,
+        slot="morning",
+        error_message="later retry failed",
+    )
+    successful = history_store.get_successful_platform_delivery_state(
+        run_id="retry-safe",
+        platform="facebook",
+        post_type="reel",
+    )
+    assert successful["buffer_post_id"] == "original-buffer-id"
 
 
 def test_save_published_post_and_missing_metrics():

@@ -1,6 +1,7 @@
 """Tests for prompt_builder.py: prompt construction and platform caption rules.
 Gemini is fully mocked; no live network calls occur.
 """
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,15 @@ import campaign_engine
 import config
 import history_store
 import prompt_builder
+import resolved_content_brief
+import voice_provider
+
+
+@pytest.fixture(autouse=True)
+def _disable_real_content_retry_waits(monkeypatch):
+    monkeypatch.setattr(
+        prompt_builder, "_CONTENT_503_RETRY_DELAYS_SECONDS", ()
+    )
 
 
 def _presentation_content(
@@ -55,6 +65,50 @@ def _fake_selection():
         "cta": campaign["ctas"][0],
         "thread_topic": campaign["thread_topics"][0],
     }
+
+
+def _resolved_profile_brief(
+    *,
+    category_id="general_prayer",
+    content_type="prayer_read",
+    video_template="long_prayer",
+):
+    return resolved_content_brief.resolve_content_brief(
+        run_id="profile-test",
+        slot="morning",
+        post_date="2026-07-29",
+        platform_mode="reels_only",
+        candidate_campaign=None,
+        campaigns=[],
+        weekly_content={
+            **_presentation_content(
+                content_type=content_type,
+                video_template=video_template,
+                duration_seconds=30,
+                engagement_prompt_enabled=True,
+            ),
+            "emotion": "anxiety",
+            "hook_style": "recognition",
+            "objective": "Offer a safe next step.",
+            "prayer_category_id": category_id,
+        },
+        life_moments=[
+            {
+                "category": "Faith & Spiritual Life",
+                "moment": "Feeling anxious before the day begins",
+                "emotions": ["anxiety"],
+            }
+        ],
+        hook_styles=[
+            {
+                "name": "Recognition",
+                "psychology": "Recognize the felt experience.",
+                "best_time": "Any",
+                "emotions": ["anxiety"],
+                "example": "Example text that must not enter profile guidance.",
+            }
+        ],
+    )
 
 
 def test_build_prompt_forbids_invented_urls_and_includes_slot_guidance():
@@ -275,6 +329,265 @@ def test_build_prompt_emotional_flow_ordering():
     requirements_pos = lower.index("requirements:")
 
     assert creative_brief_pos < brand_rules_pos < app_features_pos < constraints_pos < requirements_pos
+
+
+def test_current_default_profiles_leave_prompt_byte_for_byte_unchanged(monkeypatch):
+    brief = replace(
+        _resolved_profile_brief(),
+        hook_profile_id="current_default",
+        body_profile_id="current_default",
+    )
+    assert brief.hook_profile_id == "current_default"
+    assert brief.voice_profile_id == "natural_conversational"
+    assert brief.body_profile_id == "current_default"
+    actual = prompt_builder.build_prompt(
+        post_type="download-focused morning ad",
+        selection=_fake_selection(),
+        slot="morning",
+        tracked_url="https://example.com",
+        resolved_brief=brief,
+    )
+    monkeypatch.setattr(
+        prompt_builder,
+        "build_resolved_profile_guidance",
+        lambda _resolved_brief: "",
+    )
+    expected = prompt_builder.build_prompt(
+        post_type="download-focused morning ad",
+        selection=_fake_selection(),
+        slot="morning",
+        tracked_url="https://example.com",
+        resolved_brief=brief,
+    )
+    assert actual == expected
+    assert "Resolved Creative Profile Guidance" not in actual
+
+
+def test_general_prayer_injects_hook_guidance_without_changing_writing_or_tts():
+    brief = _resolved_profile_brief()
+    assert brief.hook_profile_id == "gentle_invitation"
+    assert brief.voice_profile_id == "natural_conversational"
+    assert brief.body_profile_id == "general_prayer"
+
+    prompt = prompt_builder.build_prompt(
+        post_type="download-focused morning ad",
+        selection=_fake_selection(),
+        slot="morning",
+        tracked_url="https://example.com",
+        resolved_brief=brief,
+    )
+    assert "Resolved Creative Profile Guidance" in prompt
+    assert "Resolved Hook Profile:" in prompt
+    assert "ID: gentle_invitation" in prompt
+    assert "Resolved Writing Profile:" in prompt
+    assert "ID: natural_conversational" in prompt
+    assert "Resolved Body Profile:" in prompt
+    assert "ID: general_prayer" in prompt
+    assert (
+        voice_provider.select_style_profile(
+            {
+                "long_form_type": "prayer",
+                "hook_profile_id": brief.hook_profile_id,
+                "voice_profile_id": brief.voice_profile_id,
+            }
+        )
+        == "natural_conversational"
+    )
+
+
+def test_nondefault_hook_and_writing_guidance_is_injected_deterministically():
+    brief = _resolved_profile_brief(category_id="anxiety")
+    prompt = prompt_builder.build_prompt(
+        post_type="download-focused morning ad",
+        selection=_fake_selection(),
+        slot="morning",
+        tracked_url="https://example.com",
+        resolved_brief=brief,
+    )
+    assert "Resolved Hook Profile:" in prompt
+    assert "ID: empathetic_recognition" in prompt
+    assert "Resolved Writing Profile:" in prompt
+    assert "ID: gentle_encouraging" in prompt
+    assert "Resolved Body Profile:" in prompt
+    assert "ID: anxiety_relief" in prompt
+    assert "content writing only; never use this profile to control TTS" in prompt
+    assert "Example text that must not enter profile guidance." not in prompt
+    assert prompt.index("Resolved Hook Profile:") < prompt.index(
+        "Resolved Writing Profile:"
+    )
+    assert prompt.index("Resolved Writing Profile:") < prompt.index(
+        "Resolved Body Profile:"
+    )
+    assert prompt.index("Resolved Body Profile:") < prompt.index(
+        "The Life Moment, Hook Style, Objective, Tone, and Emotional Goal above"
+    )
+    assert prompt.index("Resolved Creative Profile Guidance") < prompt.index(
+        "The Life Moment, Hook Style, Objective, Tone, and Emotional Goal above"
+    )
+    assert "bridge_line: optional. One natural sentence" in prompt
+    assert "script_segments: optional. JSON array of 2 to 5" in prompt
+    assert "Write toward this emotional arc, in this order" in prompt
+
+
+def test_prompt_builder_consumes_exact_resolved_profile_ids(monkeypatch):
+    brief = _resolved_profile_brief(category_id="anxiety")
+    calls = []
+    original_hook_lookup = resolved_content_brief.get_hook_profile_definition
+    original_writing_lookup = resolved_content_brief.get_writing_profile_definition
+    original_body_lookup = resolved_content_brief.get_body_profile_definition
+
+    def hook_lookup(profile_id, **kwargs):
+        calls.append(("hook", profile_id, kwargs["creative_policy_version"]))
+        return original_hook_lookup(profile_id, **kwargs)
+
+    def writing_lookup(profile_id, **kwargs):
+        calls.append(("writing", profile_id, kwargs["creative_policy_version"]))
+        return original_writing_lookup(profile_id, **kwargs)
+
+    def body_lookup(profile_id, **kwargs):
+        calls.append(("body", profile_id, kwargs["creative_policy_version"]))
+        return original_body_lookup(profile_id, **kwargs)
+
+    monkeypatch.setattr(
+        resolved_content_brief,
+        "get_hook_profile_definition",
+        hook_lookup,
+    )
+    monkeypatch.setattr(
+        resolved_content_brief,
+        "get_writing_profile_definition",
+        writing_lookup,
+    )
+    monkeypatch.setattr(
+        resolved_content_brief,
+        "get_body_profile_definition",
+        body_lookup,
+    )
+    prompt_builder.build_resolved_profile_guidance(brief)
+    assert calls == [
+        ("hook", "empathetic_recognition", "1"),
+        ("writing", "gentle_encouraging", "1"),
+        ("body", "anxiety_relief", "1"),
+    ]
+
+
+def test_writing_profile_guidance_never_invokes_or_mutates_tts(monkeypatch):
+    brief = _resolved_profile_brief(category_id="anxiety")
+    style_profiles_before = {
+        key: dict(value)
+        for key, value in voice_provider.STYLE_PROFILES.items()
+    }
+    monkeypatch.setattr(
+        voice_provider,
+        "select_style_profile",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("TTS selection must not be called")
+        ),
+    )
+    guidance = prompt_builder.build_resolved_profile_guidance(brief)
+    assert "gentle_encouraging" in guidance
+    assert voice_provider.STYLE_PROFILES == style_profiles_before
+
+
+def test_voice_profile_id_is_ignored_by_tts_style_selection():
+    assert (
+        voice_provider.select_style_profile(
+            {
+                "long_form_type": "prayer",
+                "voice_profile_id": "gentle_encouraging",
+            }
+        )
+        == "natural_conversational"
+    )
+
+
+def test_body_guidance_scope_does_not_duplicate_hook_or_cta_instructions():
+    guidance = prompt_builder.build_resolved_profile_guidance(
+        _resolved_profile_brief(category_id="anxiety")
+    )
+    assert guidance.count("Apply the Hook Profile only to opening_hook") == 1
+    assert guidance.count("CTA language") == 1
+    body_section = guidance.split("Resolved Body Profile:", 1)[1]
+    assert "opening_hook" not in body_section
+    assert "Come pray with me" not in body_section
+    assert "hashtags" not in body_section.lower()
+
+
+def test_body_profile_diagnostics_are_advisory_and_do_not_rewrite_copy():
+    brief = _resolved_profile_brief(category_id="anxiety")
+    ad_copy = {
+        "opening_hook": "Bring this burden to God.",
+        "bridge_line": "Bring this burden to God.",
+        "script_segments": [
+            "Everything will be fine.",
+            "Everything will be fine.",
+        ],
+        "closing_line": "Nothing bad will happen.",
+    }
+    original = {
+        key: list(value) if isinstance(value, list) else value
+        for key, value in ad_copy.items()
+    }
+    warnings = prompt_builder.validate_body_profile_output(ad_copy, brief)
+    assert "body_may_be_overly_generic_for_category" in warnings
+    assert "body_duplicates_opening_hook" in warnings
+    assert "body_repeats_petition" in warnings
+    assert "body_contains_unsupported_promise" in warnings
+    assert ad_copy == original
+
+
+def test_morning_body_profile_warns_about_nighttime_crossover():
+    brief = _resolved_profile_brief(category_id="morning_prayer")
+    warnings = prompt_builder.validate_body_profile_output(
+        {
+            "bridge_line": "As you prepare for bedtime, bring this day to God.",
+            "script_segments": ["Give us direction and purpose through the night."],
+            "closing_line": "Amen.",
+        },
+        brief,
+    )
+    assert "body_contains_inappropriate_time_language" in warnings
+
+
+def test_opening_hook_validation_accepts_valid_hook():
+    profile = resolved_content_brief.get_hook_profile_definition(
+        "gentle_invitation"
+    )
+    assert (
+        prompt_builder.validate_opening_hook(
+            "Before you sleep, pray with me.",
+            profile,
+        )
+        == []
+    )
+
+
+def test_opening_hook_validation_warns_for_blank_hook():
+    profile = resolved_content_brief.get_hook_profile_definition(
+        "gentle_invitation"
+    )
+    assert prompt_builder.validate_opening_hook("", profile) == ["hook_blank"]
+
+
+def test_opening_hook_validation_warns_without_rewriting_copy():
+    profile = resolved_content_brief.get_hook_profile_definition(
+        "empathetic_recognition"
+    )
+    hook = "Anxiety has been following you through every single moment of this difficult day"
+    warnings = prompt_builder.validate_opening_hook(hook, profile)
+    assert "hook_exceeds_preferred_word_range" in warnings
+    assert "hook_excessively_long" in warnings
+    assert "hook_incomplete_thought" in warnings
+    assert "hook_exceeds_preferred_reading_duration" in warnings
+    assert hook == "Anxiety has been following you through every single moment of this difficult day"
+
+
+def test_opening_hook_validation_warns_below_preferred_word_range():
+    profile = resolved_content_brief.get_hook_profile_definition(
+        "hopeful_encouragement"
+    )
+    warnings = prompt_builder.validate_opening_hook("Hope remains.", profile)
+    assert "hook_below_preferred_word_range" in warnings
 
 
 def test_build_prompt_does_not_lock_gemini_to_preselected_spiritual_action():
@@ -508,15 +821,119 @@ def _configure_content_model_keys(
     primary_key="primary-key",
     secondary_key="secondary-key",
 ):
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY", primary_key)
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY_PRIMARY", primary_key)
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY_SECONDARY", secondary_key)
     monkeypatch.setenv("GEMINI_API_KEY_PRIMARY", primary_key)
     monkeypatch.setenv("GEMINI_API_KEY_SECONDARY", secondary_key)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+
+def test_production_content_model_order_excludes_unavailable_legacy_fallback():
+    assert prompt_builder._get_configured_content_models() == [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+    ]
+    assert "gemini-2.5-flash" not in (
+        prompt_builder._get_configured_content_models()
+    )
+
+
+def test_generate_ad_copy_retries_503_with_backoff_before_fallback(monkeypatch):
+    selection = _fake_selection()
+    _configure_content_model_keys(monkeypatch)
+    monkeypatch.setattr(
+        prompt_builder, "_CONTENT_503_RETRY_DELAYS_SECONDS", (2.0, 5.0)
+    )
+    client = MagicMock()
+    client.models.generate_content.side_effect = [
+        RuntimeError("503 service unavailable"),
+        _valid_ad_copy_response(),
+    ]
+    sleeps = []
+    monkeypatch.setattr(prompt_builder.time, "sleep", sleeps.append)
+
+    with patch.object(prompt_builder, "_get_gemini_client", return_value=client):
+        ad_copy = prompt_builder.generate_ad_copy(
+            post_type="download-focused evening ad",
+            selection=selection,
+            slot="evening",
+            tracked_url="https://x.test/download?t=abc",
+        )
+
+    assert ad_copy["brand_header"] == "PRAYONIT"
+    assert _generate_content_models(client) == [
+        "gemini-3.6-flash",
+        "gemini-3.6-flash",
+    ]
+    assert sleeps == [2.0]
+
+
+def test_generate_ad_copy_bounds_503_retries_then_switches_model(monkeypatch):
+    selection = _fake_selection()
+    _configure_content_model_keys(monkeypatch)
+    monkeypatch.setattr(
+        prompt_builder, "_CONTENT_503_RETRY_DELAYS_SECONDS", (2.0, 5.0)
+    )
+    primary_client = MagicMock()
+    secondary_client = MagicMock()
+    primary_client.models.generate_content.side_effect = RuntimeError(
+        "503 service unavailable"
+    )
+    secondary_client.models.generate_content.return_value = (
+        _valid_ad_copy_response()
+    )
+    sleeps = []
+    monkeypatch.setattr(prompt_builder.time, "sleep", sleeps.append)
+
+    def fake_get_client(api_key=None):
+        return primary_client if api_key == "primary-key" else secondary_client
+
+    with patch.object(
+        prompt_builder, "_get_gemini_client", side_effect=fake_get_client
+    ):
+        prompt_builder.generate_ad_copy(
+            post_type="download-focused evening ad",
+            selection=selection,
+            slot="evening",
+            tracked_url="https://x.test/download?t=abc",
+        )
+
+    assert _generate_content_models(primary_client) == [
+        "gemini-3.6-flash",
+        "gemini-3.6-flash",
+        "gemini-3.6-flash",
+    ]
+    assert _generate_content_models(secondary_client) == ["gemini-3.5-flash"]
+    assert sleeps == [2.0, 5.0]
+
+
+def test_unavailable_secondary_model_does_not_continue_to_tertiary(monkeypatch):
+    selection = _fake_selection()
+    _configure_content_model_keys(monkeypatch)
+    client = MagicMock()
+    client.models.generate_content.side_effect = [
+        RuntimeError("502 bad gateway"),
+        RuntimeError("404 model unavailable to this account"),
+    ]
+
+    with patch.object(prompt_builder, "_get_gemini_client", return_value=client):
+        with pytest.raises(RuntimeError, match="404"):
+            prompt_builder.generate_ad_copy(
+                post_type="download-focused evening ad",
+                selection=selection,
+                slot="evening",
+                tracked_url="https://x.test/download?t=abc",
+            )
+
+    assert _generate_content_models(client) == [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+    ]
 
 
 def test_generate_ad_copy_primary_model_uses_primary_key(monkeypatch):
@@ -539,7 +956,7 @@ def test_generate_ad_copy_primary_model_uses_primary_key(monkeypatch):
         )
 
     assert client_keys == ["primary-key"]
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def test_generate_ad_copy_secondary_model_uses_secondary_key_when_configured(monkeypatch):
@@ -565,8 +982,8 @@ def test_generate_ad_copy_secondary_model_uses_secondary_key_when_configured(mon
 
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert client_keys == ["primary-key", "secondary-key"]
-    assert _generate_content_models(primary_client) == ["gemini-3.5-flash"]
-    assert _generate_content_models(secondary_client) == ["gemini-2.5-flash"]
+    assert _generate_content_models(primary_client) == ["gemini-3.6-flash"]
+    assert _generate_content_models(secondary_client) == ["gemini-3.5-flash"]
 
 
 def test_generate_ad_copy_tertiary_model_uses_secondary_key_when_configured(monkeypatch):
@@ -595,10 +1012,10 @@ def test_generate_ad_copy_tertiary_model_uses_secondary_key_when_configured(monk
 
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert client_keys == ["primary-key", "secondary-key", "secondary-key"]
-    assert _generate_content_models(primary_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(primary_client) == ["gemini-3.6-flash"]
     assert _generate_content_models(secondary_client) == [
-        "gemini-2.5-flash",
-        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
     ]
 
 
@@ -628,17 +1045,17 @@ def test_generate_ad_copy_missing_secondary_key_uses_primary_for_all_models(monk
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert client_keys == ["primary-key", "primary-key", "primary-key"]
     assert _generate_content_models(mock_client) == [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
     ]
 
 
 def test_generate_ad_copy_legacy_gemini_api_key_remains_valid_primary_key(monkeypatch):
     selection = _fake_selection()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY", "legacy-key")
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY_PRIMARY", "legacy-key")
     monkeypatch.setattr(prompt_builder.config, "GEMINI_API_KEY_SECONDARY", "legacy-key")
@@ -711,8 +1128,8 @@ def test_generate_ad_copy_switches_model_and_client_after_temporary_primary_fail
 
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert client_keys == ["primary-key", "secondary-key"]
-    assert _generate_content_models(primary_client) == ["gemini-3.5-flash"]
-    assert _generate_content_models(secondary_client) == ["gemini-2.5-flash"]
+    assert _generate_content_models(primary_client) == ["gemini-3.6-flash"]
+    assert _generate_content_models(secondary_client) == ["gemini-3.5-flash"]
 
 
 def test_generate_ad_copy_secondary_key_auth_failure_does_not_expose_key(monkeypatch, capsys):
@@ -758,9 +1175,9 @@ def test_generate_ad_copy_primary_success_calls_only_primary_model(monkeypatch):
     )
     mock_client = MagicMock()
     mock_client.models.generate_content.return_value = _valid_ad_copy_response()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     with patch.object(prompt_builder, "_get_gemini_client", return_value=mock_client):
         ad_copy = prompt_builder.generate_ad_copy(
@@ -771,7 +1188,7 @@ def test_generate_ad_copy_primary_success_calls_only_primary_model(monkeypatch):
         )
 
     assert ad_copy["brand_header"] == "PRAYONIT"
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def test_generate_ad_copy_temporary_primary_failure_immediately_calls_secondary(monkeypatch):
@@ -788,9 +1205,9 @@ def test_generate_ad_copy_temporary_primary_failure_immediately_calls_secondary(
     )
     responses = [RuntimeError("503 service unavailable"), _valid_ad_copy_response()]
     mock_client = MagicMock()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     def fake_generate_content(**kwargs):
         result = responses.pop(0)
@@ -810,8 +1227,8 @@ def test_generate_ad_copy_temporary_primary_failure_immediately_calls_secondary(
 
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert _generate_content_models(mock_client) == [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-2.5-flash",
     ]
 
 
@@ -833,9 +1250,9 @@ def test_generate_ad_copy_temporary_primary_and_secondary_failures_call_tertiary
         _valid_ad_copy_response(),
     ]
     mock_client = MagicMock()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     def fake_generate_content(**kwargs):
         result = responses.pop(0)
@@ -855,9 +1272,9 @@ def test_generate_ad_copy_temporary_primary_and_secondary_failures_call_tertiary
 
     assert ad_copy["brand_header"] == "PRAYONIT"
     assert _generate_content_models(mock_client) == [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
     ]
 
 
@@ -865,9 +1282,9 @@ def test_generate_ad_copy_calls_each_configured_model_no_more_than_once(monkeypa
     selection = _fake_selection()
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = RuntimeError("503 service unavailable")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     with patch.object(prompt_builder, "_get_gemini_client", return_value=mock_client):
         with pytest.raises(RuntimeError):
@@ -879,9 +1296,9 @@ def test_generate_ad_copy_calls_each_configured_model_no_more_than_once(monkeypa
             )
 
     assert _generate_content_models(mock_client) == [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-2.5-flash",
-        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
     ]
 
 
@@ -889,9 +1306,9 @@ def test_generate_ad_copy_does_not_fallback_on_permanent_primary_error(monkeypat
     selection = _fake_selection()
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = RuntimeError("400 invalid argument")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     with patch.object(prompt_builder, "_get_gemini_client", return_value=mock_client):
         with pytest.raises(RuntimeError):
@@ -902,16 +1319,16 @@ def test_generate_ad_copy_does_not_fallback_on_permanent_primary_error(monkeypat
                 tracked_url="https://x.test/download?t=abc",
             )
 
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def test_generate_ad_copy_parsing_error_does_not_trigger_another_model(monkeypatch):
     selection = _fake_selection()
     mock_client = MagicMock()
     mock_client.models.generate_content.return_value = SimpleNamespace(text='{"brand_header": "PRAYONIT"}')
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "gemini-3.5-flash-lite")
 
     with patch.object(prompt_builder, "_get_gemini_client", return_value=mock_client):
         with pytest.raises(RuntimeError):
@@ -922,15 +1339,15 @@ def test_generate_ad_copy_parsing_error_does_not_trigger_another_model(monkeypat
                 tracked_url="https://x.test/download?t=abc",
             )
 
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def test_generate_ad_copy_without_tertiary_uses_only_primary_and_secondary(monkeypatch):
     selection = _fake_selection()
     responses = [RuntimeError("503 service unavailable"), RuntimeError("502 bad gateway")]
     mock_client = MagicMock()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-2.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "gemini-3.5-flash")
     monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "")
 
     def fake_generate_content(**kwargs):
@@ -951,8 +1368,8 @@ def test_generate_ad_copy_without_tertiary_uses_only_primary_and_secondary(monke
             )
 
     assert _generate_content_models(mock_client) == [
+        "gemini-3.6-flash",
         "gemini-3.5-flash",
-        "gemini-2.5-flash",
     ]
 
 
@@ -960,7 +1377,7 @@ def test_generate_ad_copy_without_secondary_and_tertiary_preserves_single_model_
     selection = _fake_selection()
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = RuntimeError("503 service unavailable")
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
     monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "")
     monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "")
 
@@ -973,14 +1390,14 @@ def test_generate_ad_copy_without_secondary_and_tertiary_preserves_single_model_
                 tracked_url="https://x.test/download?t=abc",
             )
 
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def test_generate_ad_copy_never_uses_tts_model_settings(monkeypatch):
     selection = _fake_selection()
     mock_client = MagicMock()
     mock_client.models.generate_content.return_value = _valid_ad_copy_response()
-    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.5-flash")
+    monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_PRIMARY", "gemini-3.6-flash")
     monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_SECONDARY", "")
     monkeypatch.setattr(prompt_builder.config, "CONTENT_MODEL_TERTIARY", "")
     monkeypatch.setattr(prompt_builder.config, "VOICE_MODEL", "gemini-3.1-flash-tts-preview")
@@ -995,7 +1412,7 @@ def test_generate_ad_copy_never_uses_tts_model_settings(monkeypatch):
             tracked_url="https://x.test/download?t=abc",
         )
 
-    assert _generate_content_models(mock_client) == ["gemini-3.5-flash"]
+    assert _generate_content_models(mock_client) == ["gemini-3.6-flash"]
 
 
 def _fake_platform_urls():
