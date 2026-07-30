@@ -1326,6 +1326,7 @@ def cmd_run(slot) -> int:
             presentation_config = {
                 **content_engine.get_presentation_config(weekly_content),
                 "slot": slot,
+                "life_moment_text": brief.life_moment_text,
             }
             video_template = presentation_config.get("video_template", "short_promo")
             if video_template in ("long_prayer", "long_devotional", "long_encouragement"):

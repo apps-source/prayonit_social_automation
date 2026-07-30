@@ -549,11 +549,115 @@ def test_captions_span_the_narration_duration():
     assert timeline[0]["text"] == _long_copy()["opening_hook"]
 
 
-def test_opening_genre_label_is_present_from_frame_zero():
-    layers = long_form_renderer.build_title_layers(_long_copy(), _presentation(), long_form_renderer.TARGET_CANVAS_SIZE)
-    assert len(layers) == 1
-    assert layers[0].start == 0.0
-    assert layers[0].label == "title"
+def test_opening_genre_label_does_not_compete_with_generated_hook():
+    layers = long_form_renderer.build_title_layers(
+        _long_copy(),
+        _presentation(),
+        long_form_renderer.TARGET_CANVAS_SIZE,
+    )
+    assert layers == []
+
+
+def test_devotional_renders_exact_generated_hook_first():
+    copy = _long_copy(
+        "devotional",
+        opening_hook="Notice how God quietly welcomes you?",
+    )
+    cards = long_form_renderer.build_script_cards(
+        copy,
+        _presentation(
+            video_template="long_devotional",
+            content_type="devotional_read",
+            slot="evening",
+        ),
+        30.0,
+    )
+    assert cards[0] == long_form_renderer.TextCard(
+        "Notice how God quietly welcomes you?",
+        0.0,
+        long_form_renderer.OPENING_HOOK_DURATION,
+        "opening_hook",
+    )
+
+
+@pytest.mark.parametrize("slot", ["morning", "evening"])
+def test_slot_does_not_replace_valid_generated_hook(slot):
+    copy = _long_copy(
+        "devotional",
+        opening_hook="Notice how God quietly welcomes you?",
+    )
+    presentation = _presentation(
+        video_template="long_devotional",
+        content_type="devotional_read",
+        slot=slot,
+    )
+    text, source = long_form_renderer._resolve_opening_card(
+        copy,
+        presentation,
+    )
+    assert text == "Notice how God quietly welcomes you?"
+    assert source == "opening_hook"
+    assert long_form_renderer.build_title_layers(
+        copy,
+        presentation,
+        long_form_renderer.TARGET_CANVAS_SIZE,
+    ) == []
+
+
+def test_missing_opening_hook_falls_back_to_pain_headline():
+    copy = _long_copy(
+        "devotional",
+        opening_hook="",
+        pain_headline="Stepping back into church after time away?",
+    )
+    text, source = long_form_renderer._resolve_opening_card(
+        copy,
+        _presentation(content_type="devotional_read", slot="evening"),
+    )
+    assert text == "Stepping back into church after time away?"
+    assert source == "pain_headline"
+
+
+def test_life_moment_precedes_emergency_generic_label():
+    copy = _long_copy(
+        "devotional",
+        opening_hook="",
+        pain_headline="",
+        content_headline="",
+        headline="",
+        story_headline="",
+    )
+    text, source = long_form_renderer._resolve_opening_card(
+        copy,
+        _presentation(
+            content_type="devotional_read",
+            slot="evening",
+            life_moment_text="Returning to church after time away",
+        ),
+    )
+    assert text == "Returning to church after time away?"
+    assert source == "life_moment_text"
+
+
+def test_generic_label_is_only_final_emergency_fallback():
+    copy = _long_copy(
+        "devotional",
+        opening_hook="",
+        pain_headline="",
+        content_headline="",
+        headline="",
+        story_headline="",
+    )
+    text, source = long_form_renderer._resolve_opening_card(
+        copy,
+        _presentation(
+            content_type="devotional_read",
+            slot="evening",
+            life_moment_text="",
+        ),
+    )
+    assert text == "EVENING REFLECTION"
+    assert source == "generic_content_label"
 
 
 def test_opening_hook_layer_has_no_delayed_fade():
@@ -562,10 +666,17 @@ def test_opening_hook_layer_has_no_delayed_fade():
     assert layers[0].fade_in == 0.0
 
 
-def test_no_hook_content_starts_narration_near_zero_seconds():
+def test_missing_hook_uses_meaningful_visual_fallback_before_narration():
     copy = _long_copy(opening_hook="")
     timeline = voice_provider.build_narration_segment_timeline(copy, 8.0, hook_window=0.0)
-    assert long_form_renderer._resolve_narration_start_time(copy, timeline) == 0.0
+    assert (
+        long_form_renderer._resolve_narration_start_time(
+            copy,
+            timeline,
+            _presentation(),
+        )
+        == long_form_renderer.OPENING_HOOK_DURATION
+    )
     cards, _source, _boundaries = long_form_renderer._build_audio_timed_script_cards(
         copy,
         _presentation(),
@@ -578,8 +689,10 @@ def test_no_hook_content_starts_narration_near_zero_seconds():
         remaining_lead_seconds=0.0,
         brand_start=12.0,
     )
-    first_narrated = [card for card in cards if card.kind != "opening_hook"][0]
-    assert 0.0 <= first_narrated.start <= 0.35
+    assert cards[0].kind == "opening_hook"
+    assert cards[0].text == copy["pain_headline"]
+    assert cards[0].start == 0.0
+    assert cards[0].end == long_form_renderer.OPENING_HOOK_DURATION
 
 
 def test_hook_content_starts_narration_within_opening_window():

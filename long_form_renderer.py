@@ -500,8 +500,15 @@ def _detect_wav_leading_silence(audio_path: Path) -> float:
 def _resolve_narration_start_time(
     copy: Dict[str, Any],
     narration_segment_timeline: Optional[Sequence[Dict[str, Any]]],
+    presentation_config: Optional[Dict[str, Any]] = None,
 ) -> float:
+    opening_text = _resolve_opening_card_text(copy, presentation_config)
     if narration_segment_timeline:
+        first_kind = str(
+            narration_segment_timeline[0].get("kind", "")
+        ).strip()
+        if opening_text and first_kind != "opening_hook":
+            return OPENING_HOOK_DURATION
         starts = [
             float(item.get("start", 0.0))
             for item in narration_segment_timeline
@@ -509,7 +516,7 @@ def _resolve_narration_start_time(
         ]
         if starts:
             return max(0.0, starts[0])
-    return OPENING_HOOK_DURATION if str(copy.get("opening_hook", "")).strip() else 0.0
+    return OPENING_HOOK_DURATION if opening_text else 0.0
 
 
 def _extract_narration_units(
@@ -644,7 +651,7 @@ def _build_audio_timed_script_cards(
     brand_start: float,
 ) -> Tuple[List[TextCard], str, List[float]]:
     cards: List[TextCard] = []
-    opening_hook = str(copy.get("opening_hook", "")).strip()
+    opening_hook = _resolve_opening_card_text(copy, presentation_config)
     hook_window = OPENING_HOOK_DURATION if opening_hook else 0.0
     if opening_hook:
         cards.append(TextCard(opening_hook, 0.0, hook_window, "opening_hook"))
@@ -777,7 +784,11 @@ def resolve_long_form_duration(
     narration_duration: Optional[float] = None,
 ) -> Tuple[float, float, float]:
     """Return total duration, hook window, and brand start time."""
-    hook_window = OPENING_HOOK_DURATION if str(copy.get("opening_hook", "")).strip() else 0.0
+    hook_window = (
+        OPENING_HOOK_DURATION
+        if _resolve_opening_card_text(copy, presentation_config)
+        else 0.0
+    )
     if narration_duration is None:
         total_duration = _clamp_duration(presentation_config, copy)
         brand_start = max(0.0, total_duration - FINAL_BRAND_DURATION)
@@ -805,6 +816,69 @@ def _content_label(presentation_config: Dict[str, Any]) -> str:
     if content_type == "hope_encouragement":
         return "TODAY'S ENCOURAGEMENT"
     return "MORNING PRAYER"
+
+
+_GENERIC_OPENING_LABELS = {
+    "daily devotional",
+    "devotional read",
+    "evening prayer",
+    "evening reflection",
+    "morning prayer",
+    "morning reflection",
+    "prayer before bed",
+    "today's encouragement",
+    "today's word",
+}
+
+
+def _is_meaningful_opening_text(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    normalized = " ".join(text.casefold().split()).strip(" .!?")
+    return normalized not in _GENERIC_OPENING_LABELS
+
+
+def _life_moment_opening_text(value: Any) -> str:
+    text = " ".join(str(value or "").split()).strip()
+    if not text:
+        return ""
+    if text[-1] not in ".?!":
+        text = f"{text}?"
+    return text
+
+
+def _resolve_opening_card(
+    copy: Dict[str, Any],
+    presentation_config: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, str]:
+    config_values = presentation_config or {}
+    candidates = (
+        ("opening_hook", copy.get("opening_hook")),
+        ("pain_headline", copy.get("pain_headline")),
+        ("content_headline", copy.get("content_headline")),
+        ("headline", copy.get("headline")),
+        ("story_headline", copy.get("story_headline")),
+    )
+    for source, value in candidates:
+        if _is_meaningful_opening_text(value):
+            return str(value).strip(), source
+
+    life_moment = (
+        copy.get("life_moment_text")
+        or config_values.get("life_moment_text")
+    )
+    life_moment_text = _life_moment_opening_text(life_moment)
+    if _is_meaningful_opening_text(life_moment_text):
+        return life_moment_text, "life_moment_text"
+    return _content_label(config_values), "generic_content_label"
+
+
+def _resolve_opening_card_text(
+    copy: Dict[str, Any],
+    presentation_config: Optional[Dict[str, Any]] = None,
+) -> str:
+    return _resolve_opening_card(copy, presentation_config)[0]
 
 
 def list_long_form_video_candidates(
@@ -921,8 +995,9 @@ def build_script_cards(
     narration_duration: Optional[float] = None,
 ) -> List[TextCard]:
     """Build the ordered text-card timeline for the long-form script."""
+    opening_hook = _resolve_opening_card_text(copy, presentation_config)
     if narration_segment_timeline is not None:
-        return [
+        timeline_cards = [
             TextCard(
                 text=str(item.get("text", "")).strip(),
                 start=float(item.get("start", 0.0)),
@@ -932,9 +1007,28 @@ def build_script_cards(
             for item in narration_segment_timeline
             if str(item.get("text", "")).strip()
         ]
+        if opening_hook and not any(
+            card.kind == "opening_hook" for card in timeline_cards
+        ):
+            timeline_cards = [
+                TextCard(
+                    opening_hook,
+                    0.0,
+                    OPENING_HOOK_DURATION,
+                    "opening_hook",
+                )
+            ] + [
+                TextCard(
+                    card.text,
+                    card.start + OPENING_HOOK_DURATION,
+                    card.end + OPENING_HOOK_DURATION,
+                    card.kind,
+                )
+                for card in timeline_cards
+            ]
+        return timeline_cards
 
     cards: List[TextCard] = []
-    opening_hook = str(copy.get("opening_hook", "")).strip()
     bridge_line = str(copy.get("bridge_line", "")).strip()
     closing_line = str(copy.get("closing_line", "")).strip()
     script_segments = _normalize_script_segments(copy)
@@ -1158,24 +1252,9 @@ def build_title_layers(
     presentation_config: Dict[str, Any],
     canvas_size: Tuple[int, int],
 ) -> List[OverlayLayer]:
-    title = _content_label(presentation_config)
-    if not title:
-        return []
-    width, height = canvas_size
-    title_img = _fit_card_layer(title, canvas_size, "title")
-    x = int((width - title_img.width) / 2)
-    y = max(int(height * SAFE_ZONE_TOP_FRAC), int(height * 0.22) - int(title_img.height / 2))
-    return [
-        OverlayLayer(
-            image=title_img,
-            position=(x, y),
-            start=0.0,
-            end=OPENING_HOOK_DURATION if str(copy.get("opening_hook", "")).strip() else 2.0,
-            fade_in=0.0,
-            fade_out=0.3,
-            label="title",
-        )
-    ]
+    # The opening hook card is the visual title. A second genre label competes
+    # with the scroll stopper and must remain metadata-only.
+    return []
 
 
 def build_final_brand_layers(
@@ -1363,6 +1442,10 @@ def render_long_form_video(
     creative_policy_version: Optional[str] = None,
 ) -> Path:
     """Render one finished long-form 9:16 MP4."""
+    opening_card_text, opening_card_source = _resolve_opening_card(
+        copy,
+        presentation_config,
+    )
     caption_profile = resolved_content_brief.get_caption_profile_definition(
         caption_profile_id,
         creative_policy_version=creative_policy_version,
@@ -1381,14 +1464,18 @@ def render_long_form_video(
         if wav_duration <= 0:
             raise RuntimeError(f"Narration WAV has no usable audio duration: {narration_audio_path}")
 
-        intended_narration_start_time = _resolve_narration_start_time(copy, narration_segment_timeline)
+        intended_narration_start_time = _resolve_narration_start_time(
+            copy,
+            narration_segment_timeline,
+            presentation_config,
+        )
         detected_leading_silence = _detect_wav_leading_silence(narration_audio_path)
         trim_seconds = 0.0
         if detected_leading_silence > LEADING_SILENCE_FLOOR_SECONDS:
             trim_seconds = max(0.0, detected_leading_silence - LEADING_SILENCE_PRESERVE_SECONDS)
         remaining_lead = max(0.0, detected_leading_silence - trim_seconds)
         actual_speech_start_time = intended_narration_start_time + (
-            OPENING_NARRATION_DELAY_SECONDS if str(copy.get("opening_hook", "")).strip() else 0.0
+            OPENING_NARRATION_DELAY_SECONDS if opening_card_text else 0.0
         )
         audio_offset_seconds = max(0.0, actual_speech_start_time - remaining_lead)
         effective_audio_duration = max(0.0, wav_duration - trim_seconds)
@@ -1490,12 +1577,16 @@ def render_long_form_video(
             return np.array(canvas.convert("RGB"))
 
         clip = VideoClip(make_frame, duration=duration_seconds).with_fps(fps)
+        print(
+            "[long_form_renderer] Opening card source: "
+            f"{opening_card_source}"
+        )
         if has_audio:
             print(f"Long-form narration source: {_safe_filename(narration_audio_path)}")
             print(f"Narration duration: {audio_timing['wav_duration']:.2f}s")
             print(
                 f"[long_form_renderer] Narration sync delay: "
-                f"{OPENING_NARRATION_DELAY_SECONDS if str(copy.get('opening_hook', '')).strip() else 0.0:.2f}s"
+                f"{OPENING_NARRATION_DELAY_SECONDS if opening_card_text else 0.0:.2f}s"
             )
             print(f"[long_form_renderer] Caption lead: {CAPTION_LEAD_SECONDS:.2f}s")
             print(f"[long_form_renderer] Intended narration start time: {audio_timing['intended_narration_start_time']:.2f}s")
