@@ -1,0 +1,29 @@
+{
+  "catalog_version": "1",
+  "screenshots": [
+    {
+      "filename": "Mood_Screen.jpeg",
+      "screen_type": "mood_selection",
+      "display_order": 1,
+      "active": true,
+      "last_verified_date": "2026-07-30",
+      "app_version": "unversioned-approved-capture"
+    },
+    {
+      "filename": "Verse_Devotion_Screen.jpeg",
+      "screen_type": "scripture_devotional",
+      "display_order": 2,
+      "active": true,
+      "last_verified_date": "2026-07-30",
+      "app_version": "unversioned-approved-capture"
+    },
+    {
+      "filename": "Prayer_Screen.jpeg",
+      "screen_type": "guided_prayer_or_journal",
+      "display_order": 3,
+      "active": true,
+      "last_verified_date": "2026-07-30",
+      "app_version": "unversioned-approved-capture"
+    }
+  ]
+}

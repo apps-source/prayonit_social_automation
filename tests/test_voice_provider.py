@@ -149,6 +149,7 @@ def test_all_tts_delivery_profiles_are_available():
         "anxiety_calming",
         "protection_confident",
         "devotional_measured",
+        "direct_marketing_clear",
         "current_default",
     } <= voice_provider.VALID_TTS_DELIVERY_PROFILES
 

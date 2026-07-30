@@ -207,14 +207,105 @@ VIDEO_PUBLISH_ENABLED = os.getenv("VIDEO_PUBLISH_ENABLED", "false").strip().lowe
 SOCIAL_OUTPUT_MODE = os.getenv("SOCIAL_OUTPUT_MODE", "reels_only").strip().lower() or "reels_only"
 TIKTOK_INCLUDE_LINK_IN_BIO = os.getenv("TIKTOK_INCLUDE_LINK_IN_BIO", "false").strip().lower() == "true"
 
+# ---------- Direct-marketing short videos (Tuesday / Thursday only) ----------
+DIRECT_MARKETING_ENABLED = (
+    os.getenv("DIRECT_MARKETING_ENABLED", "true").strip().lower() == "true"
+)
+DIRECT_MARKETING_AUDIO_ENABLED = (
+    os.getenv("DIRECT_MARKETING_AUDIO_ENABLED", "true").strip().lower() == "true"
+)
+DIRECT_MARKETING_SCREENSHOT_MODE = (
+    os.getenv("DIRECT_MARKETING_SCREENSHOT_MODE", "true").strip().lower()
+    == "true"
+)
+DIRECT_MARKETING_CTA = (
+    os.getenv("DIRECT_MARKETING_CTA", "Prayonit · Link in bio").strip()
+    or "Prayonit · Link in bio"
+)
+DIRECT_MARKETING_PROFILE_OVERRIDE = os.getenv(
+    "DIRECT_MARKETING_PROFILE_OVERRIDE", ""
+).strip()
+DIRECT_MARKETING_AUDIO_PROFILE = (
+    os.getenv("DIRECT_MARKETING_AUDIO_PROFILE", "current_default").strip()
+    or "current_default"
+)
+DIRECT_MARKETING_TTS_ENABLED = (
+    os.getenv("DIRECT_MARKETING_TTS_ENABLED", "true").strip().lower() == "true"
+)
+DIRECT_MARKETING_TTS_REQUIRED = (
+    os.getenv("DIRECT_MARKETING_TTS_REQUIRED", "true").strip().lower() == "true"
+)
+DIRECT_MARKETING_TEXT_MUSIC_FALLBACK_ENABLED = (
+    os.getenv(
+        "DIRECT_MARKETING_TEXT_MUSIC_FALLBACK_ENABLED",
+        "false",
+    ).strip().lower()
+    == "true"
+)
+DIRECT_MARKETING_TTS_PROFILE = (
+    os.getenv("DIRECT_MARKETING_TTS_PROFILE", "direct_marketing_clear").strip()
+    or "direct_marketing_clear"
+)
+DIRECT_MARKETING_TTS_VOICE = (
+    os.getenv("DIRECT_MARKETING_TTS_VOICE", "Orus").strip() or "Orus"
+)
+try:
+    DIRECT_MARKETING_TTS_TEMPERATURE = float(
+        os.getenv("DIRECT_MARKETING_TTS_TEMPERATURE", "0.9").strip()
+        or "0.9"
+    )
+except ValueError:
+    DIRECT_MARKETING_TTS_TEMPERATURE = 0.9
+try:
+    DIRECT_MARKETING_MUSIC_DB = float(
+        os.getenv("DIRECT_MARKETING_MUSIC_DB", "-18").strip() or "-18"
+    )
+except ValueError:
+    DIRECT_MARKETING_MUSIC_DB = -18.0
+try:
+    DIRECT_MARKETING_NARRATION_LEAD_SECONDS = max(
+        0.0,
+        float(
+            os.getenv(
+                "DIRECT_MARKETING_NARRATION_LEAD_SECONDS",
+                "0",
+            ).strip()
+            or "0"
+        ),
+    )
+except ValueError:
+    DIRECT_MARKETING_NARRATION_LEAD_SECONDS = 0.0
+try:
+    DIRECT_MARKETING_NARRATION_WORD_LIMIT = max(
+        16,
+        min(
+            24,
+            int(
+                os.getenv(
+                    "DIRECT_MARKETING_NARRATION_WORD_LIMIT",
+                    "24",
+                ).strip()
+                or "24"
+            ),
+        ),
+    )
+except ValueError:
+    DIRECT_MARKETING_NARRATION_WORD_LIMIT = 24
+DIRECT_MARKETING_SCREENSHOT_DIR = PROJECT_ROOT / "assets" / "app_screenshots"
+DIRECT_MARKETING_SCREENSHOT_CATALOG = (
+    DIRECT_MARKETING_SCREENSHOT_DIR / "catalog.json"
+)
+DIRECT_MARKETING_AUDIO_DIR = PROJECT_ROOT / "assets" / "direct_marketing_audio"
+DIRECT_MARKETING_AUDIO_CATALOG = DIRECT_MARKETING_AUDIO_DIR / "catalog.json"
+
 
 def get_social_output_mode() -> str:
     """Resolve the current process override before falling back to config."""
     return os.getenv("SOCIAL_OUTPUT_MODE", SOCIAL_OUTPUT_MODE).strip().lower() or "reels_only"
 
-# ---------- Long-form voiceover (Phase: Gemini TTS / local-only rollout) ----------
-# Voice is disabled by default so the existing long-form compositor stays
-# silent unless explicitly opted in. Short-form rendering is unaffected.
+# ---------- Shared Gemini TTS provider ----------
+# Long-form narration remains controlled by VOICE_ENABLED. The isolated
+# direct-marketing short lane uses its own DIRECT_MARKETING_TTS_* controls.
 VOICE_ENABLED = os.getenv("VOICE_ENABLED", "false").strip().lower() == "true"
 VOICE_PROVIDER = os.getenv("VOICE_PROVIDER", "gemini").strip().lower() or "gemini"
 VOICE_MODEL = os.getenv("VOICE_MODEL", "gemini-3.1-flash-tts-preview").strip() or "gemini-3.1-flash-tts-preview"

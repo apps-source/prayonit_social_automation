@@ -163,6 +163,25 @@ def test_production_generic_headline_recovered_and_buffer_allowed(isolated_datab
     # generation/upload is not what this test is validating.
     monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
     monkeypatch.setattr(prayonit_social.config, "VIDEO_PUBLISH_ENABLED", False)
+    fixed_run_time = prayonit_social.datetime(
+        2026,
+        7,
+        27,
+        12,
+        0,
+        tzinfo=prayonit_social.timezone.utc,
+    )
+    monkeypatch.setattr(
+        prayonit_social,
+        "_resolve_run_weekly_content",
+        lambda slot, now=None: (
+            fixed_run_time,
+            prayonit_social.content_engine.get_todays_content(
+                slot=slot,
+                now=fixed_run_time,
+            ),
+        ),
+    )
 
     monkeypatch.setattr(prayonit_social, "get_supabase_client", lambda: object())
     monkeypatch.setattr(prayonit_social, "list_backgrounds", lambda supabase: ["bg.jpg"])

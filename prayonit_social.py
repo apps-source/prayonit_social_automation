@@ -36,6 +36,7 @@ import buffer_client
 import campaign_engine
 import creative_engine_v3
 import config
+import direct_marketing
 import history_store
 import image_renderer
 import platform_post_preparer
@@ -1138,6 +1139,13 @@ def cmd_run(slot) -> int:
     # The handoff note and future analytics consume this canonical topic;
     # generated copy must not replace it with a campaign-derived topic.
     ad_copy["creator_search_topic"] = brief.creator_search_topic
+    if brief.content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        ad_copy = direct_marketing.normalize_direct_marketing_copy(
+            ad_copy,
+            marketing_family=brief.marketing_family,
+            direct_cta=config.DIRECT_MARKETING_CTA,
+            audio_profile=brief.direct_marketing_audio_profile,
+        )
 
     # Production-only: one deterministic recovery attempt before final QA if
     # headline quality fails. No additional Gemini call is made.
@@ -1186,11 +1194,20 @@ def cmd_run(slot) -> int:
         ad_copy, selection, tracked_urls
     )
     legacy_tiktok_caption = build_tiktok_caption(ad_copy, selection, brief)
-    platform_caption_sources = {
-        "facebook": legacy_platform_captions["facebook"],
-        "instagram": legacy_platform_captions["instagram"],
-        "tiktok": legacy_tiktok_caption,
-    }
+    if brief.content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        platform_caption_sources = {
+            platform: direct_marketing.build_direct_marketing_caption(
+                ad_copy,
+                platform,
+            )
+            for platform in ("facebook", "instagram", "tiktok")
+        }
+    else:
+        platform_caption_sources = {
+            "facebook": legacy_platform_captions["facebook"],
+            "instagram": legacy_platform_captions["instagram"],
+            "tiktok": legacy_tiktok_caption,
+        }
     prepared_platform_bases = {}
     preparation_errors = {}
     for platform, base_caption in platform_caption_sources.items():
@@ -1221,14 +1238,14 @@ def cmd_run(slot) -> int:
         platform: (
             prepared_platform_bases[platform].public_caption
             if platform in prepared_platform_bases
-            else legacy_platform_captions[platform]
+            else platform_caption_sources[platform]
         )
         for platform in ("facebook", "instagram")
     }
     tiktok_caption = (
         prepared_platform_bases["tiktok"].public_caption
         if "tiktok" in prepared_platform_bases
-        else legacy_tiktok_caption
+        else platform_caption_sources["tiktok"]
     )
     history_store.merge_run_resolved_brief_metadata(
         run_row_id,
@@ -1248,6 +1265,21 @@ def cmd_run(slot) -> int:
     # all downstream paths see the final approved values.
     ad_copy["app_benefit"] = image_renderer.EXACT_BENEFIT_TEXT if hasattr(image_renderer, "EXACT_BENEFIT_TEXT") else "Get a guided, personalized prayer based on your mood right now."
     ad_copy["story_app_benefit"] = ad_copy["app_benefit"]
+    direct_marketing_copy_failures = []
+    if brief.content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        direct_marketing_copy_failures = (
+            direct_marketing.validate_direct_marketing_copy(
+                ad_copy,
+                expected_cta=config.DIRECT_MARKETING_CTA,
+            )
+        )
+        if direct_marketing_copy_failures:
+            print(
+                "Direct-marketing QA failures: {0}".format(
+                    ", ".join(direct_marketing_copy_failures)
+                ),
+                file=sys.stderr,
+            )
     qa_report = None
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     feed_local_path = None
@@ -1319,6 +1351,7 @@ def cmd_run(slot) -> int:
     video_local_path = None
     video_generation_error = None
     if config.VIDEO_ENABLED:
+        import direct_marketing_renderer
         import long_form_renderer
         import motion_renderer
 
@@ -1329,7 +1362,106 @@ def cmd_run(slot) -> int:
                 "life_moment_text": brief.life_moment_text,
             }
             video_template = presentation_config.get("video_template", "short_promo")
-            if video_template in ("long_prayer", "long_devotional", "long_encouragement"):
+            if video_template == direct_marketing.DIRECT_MARKETING_VIDEO_TEMPLATE:
+                direct_tts_enabled = bool(
+                    config.DIRECT_MARKETING_TTS_ENABLED
+                    and not config.TEST_MODE
+                )
+                direct_narration_text = ""
+                direct_narration_audio_path = None
+                if direct_tts_enabled:
+                    direct_narration_text = (
+                        direct_marketing.build_direct_marketing_narration_text(
+                            ad_copy,
+                            word_limit=(
+                                config.DIRECT_MARKETING_NARRATION_WORD_LIMIT
+                            ),
+                        )
+                    )
+                    direct_tts_copy = (
+                        direct_marketing.build_direct_marketing_tts_copy(
+                            ad_copy,
+                            word_limit=(
+                                config.DIRECT_MARKETING_NARRATION_WORD_LIMIT
+                            ),
+                        )
+                    )
+                    direct_delivery_context = {
+                        "slot": brief.slot,
+                        "content_type": brief.content_type,
+                        "prayer_category_id": brief.prayer_category_id,
+                    }
+                    direct_delivery_profile = (
+                        voice_provider.select_tts_delivery_profile(
+                            direct_tts_copy,
+                            direct_delivery_context,
+                        )
+                    )
+                    direct_style_instruction = (
+                        voice_provider.TTS_DELIVERY_PROFILES[
+                            direct_delivery_profile
+                        ]["scene"]
+                    )
+                    direct_audio_filename = (
+                        config.OUTPUT_AUDIO_DIR
+                        / "prayonit-direct-marketing-voice-{0}.wav".format(
+                            timestamp
+                        )
+                    )
+                    print(
+                        "Direct-marketing spoken script ({0} words): {1}".format(
+                            len(direct_narration_text.split()),
+                            direct_narration_text.replace("\n\n", " | "),
+                        )
+                    )
+                    direct_narration_audio_path = (
+                        voice_provider.generate_voiceover(
+                            direct_narration_text,
+                            config.DIRECT_MARKETING_TTS_VOICE,
+                            direct_style_instruction,
+                            direct_audio_filename,
+                            copy=direct_tts_copy,
+                            delivery_context=direct_delivery_context,
+                            fallback_enabled=config.VOICE_FALLBACK_ENABLED,
+                        )
+                    )
+                motion_backgrounds = sorted(
+                    config.MOTION_BACKGROUNDS_DIR.glob("*.mp4")
+                )
+                motion_background_path = (
+                    random.choice(motion_backgrounds)
+                    if motion_backgrounds
+                    else None
+                )
+                candidate_video_path = (
+                    config.OUTPUT_VIDEOS_DIR
+                    / "prayonit-direct-marketing-{0}.mp4".format(timestamp)
+                )
+                video_local_path = (
+                    direct_marketing_renderer.render_direct_marketing_short(
+                        ad_copy=ad_copy,
+                        background_path=motion_background_path,
+                        output_path=candidate_video_path,
+                        screenshot_mode=brief.direct_marketing_screenshot_mode,
+                        narration_audio_path=direct_narration_audio_path,
+                        narration_text=direct_narration_text,
+                        tts_enabled=direct_tts_enabled,
+                        tts_required=bool(
+                            config.DIRECT_MARKETING_TTS_REQUIRED
+                            and direct_tts_enabled
+                        ),
+                        text_music_fallback_enabled=(
+                            config.DIRECT_MARKETING_TEXT_MUSIC_FALLBACK_ENABLED
+                        ),
+                        seed=run_id,
+                    )
+                )
+                print(
+                    "Saved direct-marketing video preview: {0}".format(
+                        video_local_path.resolve()
+                    )
+                )
+            elif video_template in ("long_prayer", "long_devotional", "long_encouragement"):
                 filename_suffix = video_template.replace("long_", "")
                 narration_audio_path = None
                 narration_duration = None
@@ -1448,6 +1580,23 @@ def cmd_run(slot) -> int:
             })))
         print("{0}=true, so nothing was uploaded or posted.".format(mode_label))
         return 0
+
+    if brief.content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        direct_failures = list(direct_marketing_copy_failures)
+        if video_local_path is None:
+            direct_failures.append("direct_marketing_video_missing")
+        if direct_failures:
+            reason = "Direct-marketing QA critical failure(s): " + ", ".join(
+                dict.fromkeys(direct_failures)
+            )
+            history_store.update_run_record(
+                run_row_id,
+                status="failed",
+                error_message=reason,
+            )
+            print(reason)
+            print("Buffer queue skipped due to direct-marketing QA failure.")
+            return 2
 
     if reels_only_output and video_local_path is None:
         reason = "Video-specific failure: no final video was produced"

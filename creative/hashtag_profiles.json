@@ -90,6 +90,43 @@
           "facebook": ["#GodsGrace", "#PrayerForForgiveness", "#Prayonit"]
         }
       }
+    },
+    "direct_marketing": {
+      "platform_limits": {
+        "tiktok": {"minimum": 4, "maximum": 8, "selected": 8},
+        "instagram": {"minimum": 4, "maximum": 8, "selected": 8},
+        "facebook": {"minimum": 0, "maximum": 3, "selected": 3}
+      },
+      "fallback_category": "direct_marketing",
+      "category_hashtags": {
+        "direct_marketing": {
+          "tiktok": [
+            "#PrayerApp",
+            "#ChristianApp",
+            "#FaithTok",
+            "#ChristianTikTok",
+            "#NewApp",
+            "#AppRecommendation",
+            "#Prayonit",
+            "#creatorsearchinsights"
+          ],
+          "instagram": [
+            "#PrayerApp",
+            "#ChristianApp",
+            "#FaithTok",
+            "#ChristianTikTok",
+            "#NewApp",
+            "#AppRecommendation",
+            "#PrayerLife",
+            "#Prayonit"
+          ],
+          "facebook": [
+            "#PrayerApp",
+            "#ChristianApp",
+            "#Prayonit"
+          ]
+        }
+      }
     }
   }
 }

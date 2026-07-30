@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 
 import config
+import direct_marketing
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -50,6 +51,10 @@ CTA_EQUIVALENT_PATTERN = re.compile(
     r"|join\s+(?:me|us)\s+in\s+prayer"
     r"|pray\s+with\s+me(?:\s+today)?"
     r")\b[.!?]*",
+    flags=re.IGNORECASE,
+)
+DIRECT_MARKETING_CTA_PATTERN = re.compile(
+    r"\bprayonit\s*[·|:—-]\s*(?:link\s+in\s+(?:the\s+)?bio|learn\s+more)\b[.!?]*",
     flags=re.IGNORECASE,
 )
 ABSOLUTE_LOCAL_PATH_PATTERN = re.compile(
@@ -151,8 +156,10 @@ def _remove_public_fragments(text: str) -> Tuple[str, Dict[str, int]]:
     url_count = len(URL_PATTERN.findall(text or ""))
     link_count = len(LINK_IN_BIO_PATTERN.findall(text or ""))
     cta_count = len(CTA_EQUIVALENT_PATTERN.findall(text or ""))
+    cta_count += len(DIRECT_MARKETING_CTA_PATTERN.findall(text or ""))
     cleaned = HASHTAG_PATTERN.sub("", text or "")
     cleaned = URL_PATTERN.sub("", cleaned)
+    cleaned = DIRECT_MARKETING_CTA_PATTERN.sub("", cleaned)
     cleaned = LINK_IN_BIO_PATTERN.sub("", cleaned)
     cleaned = CTA_EQUIVALENT_PATTERN.sub("", cleaned)
     return _clean_spacing(cleaned), {
@@ -229,6 +236,7 @@ def _internal_metadata(
         "cta_profile_id",
         "hashtag_profile_id",
         "creative_policy_version",
+        "marketing_family",
     )
     return {
         **{
@@ -273,22 +281,36 @@ def prepare_platform_post(
         registry=registry,
     )
     body, removals = _remove_public_fragments(base_caption)
-    canonical_cta = config.FACEBOOK_CTA
+    direct_profile = (
+        profile_id == direct_marketing.DIRECT_MARKETING_HASHTAG_PROFILE
+    )
+    if direct_profile:
+        canonical_cta = (
+            "Prayonit · Learn more"
+            if platform_id == "facebook"
+            else config.DIRECT_MARKETING_CTA
+        )
+    else:
+        canonical_cta = config.FACEBOOK_CTA
     parts = [body, canonical_cta]
     if platform_id == "facebook":
         destination = str(direct_url or "").strip()
         if destination:
             parts.append(destination)
-    elif platform_id == "instagram":
+    elif platform_id == "instagram" and not direct_profile:
         parts.append("Link in bio.")
-    elif config.TIKTOK_INCLUDE_LINK_IN_BIO:
+    elif config.TIKTOK_INCLUDE_LINK_IN_BIO and not direct_profile:
         parts.append("Link in bio.")
     parts.append(" ".join(hashtags))
     public_caption = "\n\n".join(part for part in parts if part).strip()
     platform_options: Dict[str, Any] = {}
     if platform_id == "tiktok":
         title_source = str(
-            getattr(brief, "life_moment_text", "")
+            (
+                "Prayonit prayer app"
+                if direct_profile
+                else getattr(brief, "life_moment_text", "")
+            )
             or getattr(brief, "prayer_category_id", "")
             or "Prayer"
         ).strip()
@@ -332,9 +354,18 @@ def validate_prepared_post(
     ):
         errors.append("public caption exceeds platform safety limit")
     if post.post_type != "story":
-        cta_count = len(
-            CTA_EQUIVALENT_PATTERN.findall(post.public_caption)
-        )
+        if post.cta_text.startswith("Prayonit ·"):
+            cta_count = len(
+                re.findall(
+                    re.escape(post.cta_text),
+                    post.public_caption,
+                    flags=re.IGNORECASE,
+                )
+            )
+        else:
+            cta_count = len(
+                CTA_EQUIVALENT_PATTERN.findall(post.public_caption)
+            )
         if cta_count != 1:
             errors.append(f"CTA must appear exactly once; found {cta_count}")
     if len(post.hashtags) < post.hashtag_minimum:

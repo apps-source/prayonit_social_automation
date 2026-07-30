@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import config
+import direct_marketing
 from engines import content_engine
 
 
@@ -28,6 +29,7 @@ _PROFILE_REGISTRY_KEYS = {
 }
 _CONTENT_TYPE_SAFE_CATEGORIES = {
     "app_feature": ("Faith & Spiritual Life",),
+    "direct_marketing": ("Faith & Spiritual Life",),
     "prayer_read": ("Faith & Spiritual Life",),
     "night_prayer_or_rest": ("Sleep & Nighttime", "Faith & Spiritual Life"),
     "devotional_read": ("Faith & Spiritual Life",),
@@ -207,6 +209,9 @@ class ResolvedContentBrief:
     hashtag_profile_id: str = "current_default"
     creative_policy_version: str = "1"
     prayer_category_resolution_reason: str = "backward_compatible_default"
+    marketing_family: str = ""
+    direct_marketing_audio_profile: str = "current_default"
+    direct_marketing_screenshot_mode: bool = False
 
     def to_history_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -660,6 +665,8 @@ def _select_engagement_prompt(
 def validate_resolved_content_brief(brief: ResolvedContentBrief) -> List[Dict[str, str]]:
     approved_ctas = set(config.BRAND_RULES.get("approved_ctas", []))
     approved_ctas.add(config.BRAND_RULES.get("preferred_cta", ""))
+    if brief.content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        approved_ctas.add(config.DIRECT_MARKETING_CTA)
     results = _validate_creative_resolution(brief)
     aliases = load_pain_point_config()
     if brief.pain_point_id in aliases or brief.resolution_reason.startswith("exact_or_alias_match"):
@@ -743,6 +750,8 @@ def log_resolved_content_brief(
 ) -> None:
     print("Resolved Content Brief:")
     print(f"- content type: {brief.content_type}")
+    if brief.marketing_family:
+        print(f"- direct marketing family: {brief.marketing_family}")
     print(f"- prayer category: {brief.prayer_category_id}")
     print(
         "- creative profiles: hook={0}, voice={1}, body={2}, caption={3}, "
@@ -842,6 +851,22 @@ def resolve_content_brief(
     profile_ids = _resolve_creative_profile_ids(prayer_category, profile_registry)
     if caption_profile_override:
         profile_ids["caption_profile_id"] = caption_profile_override.strip()
+    profile_ids["hashtag_profile_id"] = str(
+        presentation.get("hashtag_profile", "")
+        or profile_ids["hashtag_profile_id"]
+    ).strip()
+
+    marketing_family = ""
+    if (
+        str(weekly.get("content_type", ""))
+        == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE
+    ):
+        marketing_family = direct_marketing.resolve_marketing_family(
+            post_date=post_date,
+            slot=slot,
+            configured_families=presentation.get("marketing_families", []),
+            override=config.DIRECT_MARKETING_PROFILE_OVERRIDE,
+        )
 
     engagement_type = presentation["engagement_prompt_type"]
     selected_prompt, engagement_selection_reason = _select_engagement_prompt(
@@ -889,8 +914,16 @@ def resolve_content_brief(
         creator_search_topic=_creator_search_topic(canonical_id, life_moment_text),
         asset_time_of_day=slot,
         asset_emotional_tone=canonical_id,
-        cta_id="primary_invitation",
-        cta_text=config.FACEBOOK_CTA,
+        cta_id=(
+            "direct_marketing"
+            if marketing_family
+            else "primary_invitation"
+        ),
+        cta_text=(
+            config.DIRECT_MARKETING_CTA
+            if marketing_family
+            else config.FACEBOOK_CTA
+        ),
         destination_url=config.DEFAULT_DESTINATION_URL,
         voice_style_profile="natural_conversational",
         organic_or_paid="organic",
@@ -901,5 +934,14 @@ def resolve_content_brief(
             profile_registry.get("creative_policy_version", "")
         ).strip(),
         prayer_category_resolution_reason=prayer_category_resolution_reason,
+        marketing_family=marketing_family,
+        direct_marketing_audio_profile=str(
+            presentation.get("audio_profile", "current_default")
+        ),
+        direct_marketing_screenshot_mode=bool(
+            presentation.get("screenshot_mode", False)
+            and config.DIRECT_MARKETING_SCREENSHOT_MODE
+            and marketing_family == "product_demo"
+        ),
         **profile_ids,
     )

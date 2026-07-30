@@ -393,6 +393,9 @@
   "hashtag_profiles": {
     "current_default": {
       "label": "Current Hashtag Behavior"
+    },
+    "direct_marketing": {
+      "label": "Direct Marketing Hashtag Behavior"
     }
   }
 }

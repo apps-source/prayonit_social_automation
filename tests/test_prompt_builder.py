@@ -172,17 +172,18 @@ def test_build_creative_brief_data_evening_prayer_allows_engagement_prompt():
     assert prompt_builder.creative_brief_allows_soft_promotion(todays["content_type"]) is False
 
 
-def test_build_creative_brief_data_app_feature_allows_soft_promotion():
-    # Tuesday evening in creative/weekly_rhythm.json is content_type
-    # "app_feature", which should allow a Soft Promotion but not an
-    # Engagement Prompt.
+def test_build_creative_brief_data_direct_marketing_allows_promotion():
+    # Tuesday evening is the intentional direct-marketing lane and keeps
+    # engagement prompts disabled.
     from datetime import datetime, timezone
 
     import engines.content_engine as content_engine
 
     tuesday_evening = datetime(2026, 7, 21, 20, 0, tzinfo=timezone.utc)  # Tuesday
     todays = content_engine.get_todays_content(slot="evening", now=tuesday_evening)
-    assert todays["content_type"] == "app_feature"
+    assert todays["content_type"] == "direct_marketing"
+    assert todays["video_template"] == "direct_marketing_short"
+    assert todays["marketing_enabled"] is True
     assert prompt_builder.creative_brief_allows_engagement_prompt(todays["content_type"]) is False
     assert prompt_builder.creative_brief_allows_soft_promotion(todays["content_type"]) is True
 

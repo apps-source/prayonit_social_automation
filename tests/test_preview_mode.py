@@ -222,6 +222,25 @@ def test_production_path_still_uses_generate_ad_copy_and_reaches_uploads(isolate
     monkeypatch.setattr(prayonit_social.config, "SOCIAL_OUTPUT_MODE", "full")
     monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", False)
     monkeypatch.setattr(prayonit_social.config, "require_env", lambda test_mode, preview_mode=False: None)
+    fixed_run_time = prayonit_social.datetime(
+        2026,
+        7,
+        27,
+        12,
+        0,
+        tzinfo=prayonit_social.timezone.utc,
+    )
+    monkeypatch.setattr(
+        prayonit_social,
+        "_resolve_run_weekly_content",
+        lambda slot, now=None: (
+            fixed_run_time,
+            prayonit_social.content_engine.get_todays_content(
+                slot=slot,
+                now=fixed_run_time,
+            ),
+        ),
+    )
     _patch_common_pipeline(monkeypatch)
 
     # In production mode, tracking/upload/buffer ARE expected to be called,

@@ -10,6 +10,7 @@ from google import genai
 from google.genai import types
 
 import config
+import direct_marketing
 import resolved_content_brief
 from engines import content_engine
 
@@ -212,7 +213,7 @@ _ENGAGEMENT_PROMPT_CONTENT_TYPES = (
     "gratitude_reflection",
     "night_prayer_or_rest",
 )
-_SOFT_PROMOTION_CONTENT_TYPES = ("app_feature",)
+_SOFT_PROMOTION_CONTENT_TYPES = ("app_feature", "direct_marketing")
 
 _MORNING_TONE = "Warm and encouraging"
 _EVENING_TONE = "Calm and reflective"
@@ -236,6 +237,15 @@ _LONG_FORM_TYPES = {"prayer", "devotional", "encouragement", "none"}
 
 def build_format_specific_guidance(content_type: str) -> str:
     """Return additive writing guidance for the resolved content type."""
+    if content_type == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE:
+        return """
+Format Guidance:
+- This is clear, honest product marketing, not a miniature devotional.
+- Identify Prayonit or the prayer-app category immediately.
+- State one concrete product action and one concrete benefit.
+- Keep every visual card concise enough for an eight-second silent-text video.
+- Do not invent testimonials, customer outcomes, ratings, usage numbers, or hype.
+"""
     if content_type in _PRAYER_GUIDANCE_TYPES:
         return """
 Format Guidance:
@@ -441,6 +451,9 @@ def build_creative_brief_data(
             "scene_profile_id": resolved_brief.scene_profile_id,
             "cta_profile_id": resolved_brief.cta_profile_id,
             "hashtag_profile_id": resolved_brief.hashtag_profile_id,
+            "marketing_family": getattr(
+                resolved_brief, "marketing_family", ""
+            ),
             "creative_policy_version": resolved_brief.creative_policy_version,
             "objective": resolved_brief.objective,
             "tone": resolved_brief.tone,
@@ -581,6 +594,12 @@ def build_creative_brief_preamble(slot: str, resolved_brief: Optional[Any] = Non
         "Emotional Goal:",
         brief.get("emotional_goal", ""),
     ]
+    if brief.get("marketing_family"):
+        lines += [
+            "",
+            "Direct Marketing Family:",
+            brief.get("marketing_family", ""),
+        ]
 
     if engagement_prompt:
         lines += [
@@ -619,6 +638,17 @@ def build_resolved_profile_guidance(resolved_brief: Optional[Any]) -> str:
     """Render resolver-owned writing guidance without selecting any profile."""
     if resolved_brief is None:
         return ""
+    if (
+        resolved_brief.content_type
+        == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE
+    ):
+        return (
+            "\nResolved Direct-Marketing Profile:\n"
+            f"- Family: {resolved_brief.marketing_family}\n"
+            "- Ownership: ResolvedContentBrief; do not choose another family.\n"
+            "- Scope: eight-second marketing copy only; do not apply devotional "
+            "hook, body, or TTS guidance.\n"
+        )
 
     hook_profile = resolved_content_brief.get_hook_profile_definition(
         resolved_brief.hook_profile_id,
@@ -934,12 +964,53 @@ def build_prompt(
     )
     creative_brief_preamble = build_creative_brief_preamble(slot, resolved_brief=resolved_brief)
     profile_guidance = build_resolved_profile_guidance(resolved_brief)
+    is_direct_marketing = bool(
+        resolved_brief is not None
+        and resolved_brief.content_type
+        == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE
+    )
+    if is_direct_marketing:
+        marketing_family = getattr(resolved_brief, "marketing_family", "")
+        creative_strategy_block = f"""
+The resolved Direct Marketing Family is {marketing_family}. It was selected
+before prompt construction and must not be changed or replaced.
 
-    # ---- Emotional flow: Life Moment -> Recognition Hook -> Comfort ->
-    # Hope -> Invitation -> Brand Rules -> App Features -> Constraints ----
-    return f"""
-{creative_brief_preamble}
-{weekly_rhythm_preamble}{profile_guidance}
+This post is intentionally clear product marketing. Identify Prayonit or the
+prayer-app category immediately, create an honest curiosity gap or specific
+felt need, show the product action, state a concrete benefit, and close with
+one direct destination CTA.
+
+Do not use the devotional recognition -> comfort -> hope arc. Do not delay
+the product until the end. Do not write a vague devotional-only hook.
+Do not invent customer testimonials, ratings, usage numbers, outcomes, or
+exaggerated excitement. First-person creator-style observations may describe
+the product honestly but must never be presented as customer evidence.
+"""
+        message_hierarchy = """
+Create ONE eight-second direct-marketing short using this hierarchy:
+Curiosity or felt need -> Product action -> Concrete Prayonit benefit ->
+Prayonit · Link in bio.
+"""
+        direct_field_requirements = """
+- marketing_family: must be exactly the resolved Direct Marketing Family.
+- opening_hook: 4 to 8 words where practical; product-, category-, value-,
+  or specific-need-led and readable immediately.
+- follow_up_card: one concise product action, normally 3 to 7 words.
+- product_action: the exact user action shown in follow_up_card.
+- brand_card: must be exactly "Prayonit".
+- direct_cta: must be exactly "Prayonit · Link in bio".
+- screenshot_sequence: JSON array using only mood_selection,
+  scripture_devotional, and guided_prayer_or_journal when useful.
+- audio_profile: must be exactly "current_default".
+"""
+        output_schema_fields = """
+  story_trial_support, long_form_type, opening_hook, bridge_line,
+  script_segments, closing_line, engagement_line,
+  estimated_spoken_seconds, marketing_family, follow_up_card,
+  product_action, brand_card, direct_cta, screenshot_sequence,
+  audio_profile."""
+    else:
+        creative_strategy_block = f"""
 The Life Moment, Hook Style, Objective, Tone, and Emotional Goal above are
 the single source of truth for this ad's emotional content. Do not invent
 a different pain point, hook, or angle -- build directly on what is given
@@ -969,6 +1040,23 @@ the Life Moment — do not drift onto a different topic. Use the line below
 only as a tone/style example, not as a script to copy if it does not fit
 the Life Moment above:
 "{spiritual_action}"
+"""
+        message_hierarchy = """
+Create ONE acquisition ad intended to invite the reader into a moment of
+prayer with God, following this exact message hierarchy:
+Pain or emotional need -> Spiritual action -> How Prayonit helps -> Invitation
+to pray together -> Visit prayonit.app (or "Link in bio" on Instagram).
+"""
+        direct_field_requirements = ""
+        output_schema_fields = """
+  story_trial_support, long_form_type, opening_hook, bridge_line,
+  script_segments, closing_line, engagement_line,
+  estimated_spoken_seconds."""
+
+    return f"""
+{creative_brief_preamble}
+{weekly_rhythm_preamble}{profile_guidance}
+{creative_strategy_block}
 {seasonal_block}{build_time_guidance(slot)}
 {brand_preamble}
 You are the direct-response social media copywriter for Prayonit, a Christian
@@ -981,10 +1069,7 @@ user, that God is speaking through the app, that Prayonit speaks on God's
 behalf, or that the AI knows God's will. Never promise guaranteed healing,
 sleep, peace, or relief.
 
-Create ONE {post_type} acquisition ad intended to invite the reader into a
-moment of prayer with God, following this exact message hierarchy:
-Pain or emotional need -> Spiritual action -> How Prayonit helps -> Invitation
-to pray together -> Visit prayonit.app (or "Link in bio" on Instagram).
+{message_hierarchy}
 
 This is advertising, not a sermon and not a verse-of-the-day post.
 
@@ -1005,6 +1090,7 @@ A real destination link will be appended automatically after you respond, so:
   real link/CTA is inserted by the system, not by you.
 
 Requirements:
+{direct_field_requirements}
 - brand_header: 1 to 3 short words, normally "PRAYONIT".
 - pain_headline: powerful scroll-stopping question or statement naming the
   pain/emotional need, maximum 9 words, short enough for mobile.
@@ -1085,9 +1171,7 @@ Requirements:
   spiritual_action, app_benefit, download_cta, trial_support,
   facebook_caption, instagram_caption, story_headline,
   story_spiritual_action, story_app_benefit, story_download_cta,
-  story_trial_support, long_form_type, opening_hook, bridge_line,
-  script_segments, closing_line, engagement_line,
-  estimated_spoken_seconds.
+{output_schema_fields}
 """
 
 
@@ -1494,6 +1578,18 @@ def parse_ad_copy_response(
         ad_copy["tiktok_caption"] = str(data["tiktok_caption"]).strip()
     if "threads_caption" in data and str(data.get("threads_caption", "")).strip():
         ad_copy["threads_caption"] = str(data["threads_caption"]).strip()
+    for field in (
+        "marketing_family",
+        "follow_up_card",
+        "product_action",
+        "brand_card",
+        "direct_cta",
+        "audio_profile",
+    ):
+        if field in data and str(data.get(field, "")).strip():
+            ad_copy[field] = str(data[field]).strip()
+    if isinstance(data.get("screenshot_sequence"), list):
+        ad_copy["screenshot_sequence"] = data["screenshot_sequence"]
 
     if resolved_brief is not None:
         todays_content = {"content_type": resolved_brief.content_type}
@@ -1514,6 +1610,17 @@ def parse_ad_copy_response(
             engagement_prompt_enabled=presentation["engagement_prompt_enabled"],
         )
     )
+    if (
+        resolved_brief is not None
+        and resolved_brief.content_type
+        == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE
+    ):
+        ad_copy = direct_marketing.normalize_direct_marketing_copy(
+            ad_copy,
+            marketing_family=resolved_brief.marketing_family,
+            direct_cta=config.DIRECT_MARKETING_CTA,
+            audio_profile=resolved_brief.direct_marketing_audio_profile,
+        )
     return ad_copy
 
 
@@ -1714,6 +1821,17 @@ def generate_local_ad_copy(
             }
         )
     ad_copy.update(long_form)
+    if (
+        resolved_brief is not None
+        and resolved_brief.content_type
+        == direct_marketing.DIRECT_MARKETING_CONTENT_TYPE
+    ):
+        ad_copy = direct_marketing.normalize_direct_marketing_copy(
+            ad_copy,
+            marketing_family=resolved_brief.marketing_family,
+            direct_cta=config.DIRECT_MARKETING_CTA,
+            audio_profile=resolved_brief.direct_marketing_audio_profile,
+        )
     log_resolved_hook_warnings(ad_copy, resolved_brief)
     return enforce_resolved_engagement_line(
         apply_brand_enforcement(ad_copy, config.BRAND_RULES), resolved_brief

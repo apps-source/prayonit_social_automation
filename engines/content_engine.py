@@ -55,6 +55,10 @@ _PRESENTATION_FIELDS = (
     "engagement_prompt_enabled",
     "engagement_prompt_type",
     "cta_text",
+    "hashtag_profile",
+    "marketing_families",
+    "audio_profile",
+    "screenshot_mode",
 )
 
 _VALID_VIDEO_TEMPLATES = {
@@ -63,6 +67,7 @@ _VALID_VIDEO_TEMPLATES = {
     "long_devotional",
     "short_engagement",
     "long_encouragement",
+    "direct_marketing_short",
 }
 
 _VALID_VIDEO_LIBRARIES = {"short", "long"}
@@ -90,6 +95,10 @@ _SHORT_PROMO_PRESENTATION_DEFAULTS: Dict[str, Any] = {
     "engagement_prompt_enabled": False,
     "engagement_prompt_type": "none",
     "cta_text": "Come pray with me.",
+    "hashtag_profile": "current_default",
+    "marketing_families": [],
+    "audio_profile": "current_default",
+    "screenshot_mode": False,
 }
 
 # Cached in-memory copies of the parsed JSON contents, keyed by file path.
@@ -244,7 +253,26 @@ def get_presentation_config(slot_config: Optional[Dict[str, Any]]) -> Dict[str, 
         "duration_seconds": duration_seconds,
         "engagement_prompt_type": engagement_prompt_type,
         "cta_text": slot_config.get("cta_text", _SHORT_PROMO_PRESENTATION_DEFAULTS["cta_text"]),
+        "hashtag_profile": (
+            str(slot_config.get("hashtag_profile", "")).strip()
+            or _SHORT_PROMO_PRESENTATION_DEFAULTS["hashtag_profile"]
+        ),
+        "audio_profile": (
+            str(slot_config.get("audio_profile", "")).strip()
+            or _SHORT_PROMO_PRESENTATION_DEFAULTS["audio_profile"]
+        ),
     }
+
+    raw_families = slot_config.get("marketing_families", [])
+    presentation["marketing_families"] = (
+        [
+            str(family).strip()
+            for family in raw_families
+            if str(family).strip()
+        ]
+        if isinstance(raw_families, list)
+        else []
+    )
 
     for key in (
         "marketing_enabled",
@@ -254,6 +282,7 @@ def get_presentation_config(slot_config: Optional[Dict[str, Any]]) -> Dict[str, 
         "show_link_in_bio",
         "show_app_benefit",
         "engagement_prompt_enabled",
+        "screenshot_mode",
     ):
         value = slot_config.get(key)
         presentation[key] = (

@@ -1253,6 +1253,222 @@ def test_tuesday_short_promo_still_routes_to_motion_renderer(isolated_database, 
     assert calls["short"] == 1
 
 
+def test_tuesday_direct_marketing_routes_only_to_dedicated_renderer(
+    isolated_database,
+    monkeypatch,
+    tmp_path,
+):
+    _patch_cmd_run_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(prayonit_social.config, "TEST_MODE", True)
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", False)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", True)
+    monkeypatch.setattr(
+        prayonit_social.content_engine,
+        "get_todays_content",
+        lambda slot, now=None, weekly_rhythm=None: {
+            **_presentation(
+                video_template="direct_marketing_short",
+                content_type="direct_marketing",
+                video_library="short",
+                duration_seconds=8,
+                marketing_enabled=True,
+                show_badges=False,
+                show_app_benefit=True,
+                engagement_prompt_enabled=False,
+                engagement_prompt_type="none",
+                cta_text="Prayonit · Link in bio",
+                hashtag_profile="direct_marketing",
+                marketing_families=[
+                    "product_demo",
+                    "product_announcement",
+                    "testimonial_curiosity",
+                ],
+                audio_profile="current_default",
+                screenshot_mode=True,
+            ),
+            "theme": "focus",
+            "emotion": "hopeful",
+            "hook_style": "direct_product",
+            "objective": "Show how Prayonit personalizes prayer.",
+        },
+    )
+    monkeypatch.setattr(
+        prayonit_social.prompt_builder,
+        "generate_local_ad_copy",
+        lambda selection, slot: _long_copy(
+            opening_hook="See what this prayer app does.",
+            app_benefit=(
+                "Receive Scripture, a devotional, and a guided prayer "
+                "based on your mood."
+            ),
+            long_form_type="none",
+            script_segments=[],
+            engagement_line="",
+            estimated_spoken_seconds=8,
+        ),
+    )
+    calls = {"direct": 0, "long": 0, "legacy_short": 0}
+
+    def fake_direct_renderer(**kwargs):
+        calls["direct"] += 1
+        Path(kwargs["output_path"]).write_bytes(b"x")
+        return kwargs["output_path"]
+
+    monkeypatch.setattr(
+        "direct_marketing_renderer.render_direct_marketing_short",
+        fake_direct_renderer,
+    )
+    monkeypatch.setattr(
+        "long_form_renderer.render_long_form_video",
+        lambda **kwargs: calls.__setitem__("long", calls["long"] + 1),
+    )
+    monkeypatch.setattr(
+        "motion_renderer.render_motion_ad",
+        lambda **kwargs: calls.__setitem__(
+            "legacy_short",
+            calls["legacy_short"] + 1,
+        ),
+    )
+
+    result = prayonit_social.cmd_run("morning")
+
+    assert result == 0
+    assert calls == {"direct": 1, "long": 0, "legacy_short": 0}
+
+
+def test_preview_direct_marketing_requests_orus_tts_without_publishing(
+    isolated_database,
+    monkeypatch,
+    tmp_path,
+):
+    _patch_cmd_run_pipeline(monkeypatch, tmp_path)
+    monkeypatch.setattr(prayonit_social.config, "TEST_MODE", False)
+    monkeypatch.setattr(prayonit_social.config, "PREVIEW_MODE", True)
+    monkeypatch.setattr(prayonit_social.config, "VIDEO_ENABLED", True)
+    monkeypatch.setattr(
+        prayonit_social.config,
+        "get_social_output_mode",
+        lambda: "reels_only",
+    )
+    monkeypatch.setattr(
+        prayonit_social.config,
+        "DIRECT_MARKETING_TTS_ENABLED",
+        True,
+    )
+    monkeypatch.setattr(
+        prayonit_social.config,
+        "DIRECT_MARKETING_TTS_REQUIRED",
+        True,
+    )
+    monkeypatch.setattr(
+        prayonit_social.content_engine,
+        "get_todays_content",
+        lambda slot, now=None, weekly_rhythm=None: {
+            **_presentation(
+                video_template="direct_marketing_short",
+                content_type="direct_marketing",
+                video_library="short",
+                duration_seconds=8,
+                marketing_enabled=True,
+                show_badges=False,
+                show_app_benefit=True,
+                engagement_prompt_enabled=False,
+                engagement_prompt_type="none",
+                cta_text="Prayonit · Link in bio",
+                hashtag_profile="direct_marketing",
+                marketing_families=[
+                    "product_demo",
+                    "product_announcement",
+                    "testimonial_curiosity",
+                ],
+                audio_profile="current_default",
+                screenshot_mode=True,
+            ),
+            "theme": "focus",
+            "emotion": "hopeful",
+            "hook_style": "direct_product",
+            "objective": "Show how Prayonit personalizes prayer.",
+        },
+    )
+    monkeypatch.setattr(
+        prayonit_social.prompt_builder,
+        "generate_ad_copy",
+        lambda **kwargs: _long_copy(
+            opening_hook="See what this prayer app does.",
+            app_benefit=(
+                "Receive Scripture, a devotional, and a guided prayer "
+                "based on your mood."
+            ),
+            long_form_type="none",
+            script_segments=[],
+            engagement_line="",
+            estimated_spoken_seconds=8,
+        ),
+    )
+    captured = {"tts": None, "renderer": None}
+
+    def fake_generate_voiceover(
+        text,
+        voice_name,
+        style_instruction,
+        output_path,
+        **kwargs,
+    ):
+        captured["tts"] = {
+            "text": text,
+            "voice_name": voice_name,
+            "style_instruction": style_instruction,
+            **kwargs,
+        }
+        output = Path(output_path)
+        _tone_wav(output, seconds=6.0)
+        return output
+
+    def fake_direct_renderer(**kwargs):
+        captured["renderer"] = kwargs
+        Path(kwargs["output_path"]).write_bytes(b"x")
+        return kwargs["output_path"]
+
+    monkeypatch.setattr(
+        prayonit_social.voice_provider,
+        "generate_voiceover",
+        fake_generate_voiceover,
+    )
+    monkeypatch.setattr(
+        "direct_marketing_renderer.render_direct_marketing_short",
+        fake_direct_renderer,
+    )
+    monkeypatch.setattr(
+        "long_form_renderer.render_long_form_video",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("long renderer called")
+        ),
+    )
+    monkeypatch.setattr(
+        "motion_renderer.render_motion_ad",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy short renderer called")
+        ),
+    )
+
+    result = prayonit_social.cmd_run("morning")
+
+    assert result == 0
+    assert captured["tts"]["voice_name"] == "Orus"
+    assert (
+        captured["tts"]["delivery_context"]["content_type"]
+        == "direct_marketing"
+    )
+    assert len(captured["tts"]["text"].split()) <= 24
+    assert captured["renderer"]["tts_enabled"] is True
+    assert captured["renderer"]["tts_required"] is True
+    assert captured["renderer"]["narration_audio_path"].is_file()
+    assert (
+        captured["renderer"]["narration_text"]
+        == captured["tts"]["text"]
+    )
+
+
 def test_wednesday_long_devotional_routes_to_long_form_renderer(isolated_database, monkeypatch, tmp_path):
     _patch_cmd_run_pipeline(monkeypatch, tmp_path)
     monkeypatch.setattr(prayonit_social.config, "TEST_MODE", True)

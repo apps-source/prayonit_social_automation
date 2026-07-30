@@ -1,0 +1,15 @@
+{
+  "catalog_version": "1",
+  "audio_assets": [
+    {
+      "filename": "prayonit-subtle-pulse.wav",
+      "license_source": "Prayonit original procedural composition generated in-repository",
+      "commercial_use_allowed": true,
+      "mood": "warm restrained modern",
+      "duration": 8.0,
+      "last_used": null,
+      "active": true,
+      "audio_profile": "current_default"
+    }
+  ]
+}

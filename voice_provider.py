@@ -1,4 +1,4 @@
-"""Voice provider layer for long-form narration audio."""
+"""Shared Gemini/macOS voice provider for validated narration audio."""
 from __future__ import annotations
 
 import shutil
@@ -157,6 +157,26 @@ TTS_DELIVERY_PROFILES = {
         "base_style_profile": "natural_conversational",
         "temperature": None,
     },
+    "direct_marketing_clear": {
+        "style": "Clear, warm, confident, conversational product delivery.",
+        "pace": "Brisk but natural pacing for an eight-second product demo.",
+        "scene": (
+            "Speak in a clear, warm, confident, conversational tone. Keep the "
+            "pace brisk but natural for a short product demo. Sound genuinely "
+            "interested, not overly excited, salesy, dramatic, or devotional. "
+            "Use clean emphasis on Prayonit and the concrete product benefit. "
+            "Complete the full transcript naturally within about six and a "
+            "half seconds, brisk but never rushed. Read each short phrase "
+            "exactly once, in order, "
+            "and move directly into the next phrase with only a very brief pause."
+        ),
+        "generic_context": (
+            "A concise Prayonit product demonstration spoken with clear, "
+            "restrained confidence."
+        ),
+        "base_style_profile": "natural_conversational",
+        "temperature": 0.9,
+    },
 }
 
 VALID_TTS_DELIVERY_PROFILES = set(TTS_DELIVERY_PROFILES)
@@ -231,6 +251,20 @@ def select_tts_delivery_profile_with_reason(
         context.get("prayer_category_id", "")
     ).strip().lower()
 
+    if content_type == "direct_marketing":
+        configured_profile = str(
+            getattr(
+                config,
+                "DIRECT_MARKETING_TTS_PROFILE",
+                "direct_marketing_clear",
+            )
+        ).strip().lower()
+        if configured_profile in VALID_TTS_DELIVERY_PROFILES:
+            return configured_profile, "direct-marketing content type"
+        print(
+            "[voice_provider] Invalid direct-marketing TTS profile: "
+            f"{configured_profile}; falling back safely"
+        )
     if slot == "evening" and content_type == "devotional_read":
         return "evening_reflective", "evening devotional content"
     if content_type == "devotional_read":
@@ -243,7 +277,6 @@ def select_tts_delivery_profile_with_reason(
         slot == "morning" and content_type == "hope_encouragement"
     ):
         return "morning_hopeful", "hopeful morning content"
-
     legacy_override = str(copy.get("voice_style_profile", "")).strip().lower()
     if legacy_override and legacy_override in VALID_STYLE_PROFILES:
         return legacy_override, "explicit manual override"
@@ -332,6 +365,12 @@ def build_sample_context(copy: Dict[str, Any]) -> str:
 def _resolve_voice_temperature(delivery_profile_id: Optional[str] = None) -> float:
     profile = TTS_DELIVERY_PROFILES.get(str(delivery_profile_id or ""))
     profile_temperature = profile.get("temperature") if profile else None
+    if delivery_profile_id == "direct_marketing_clear":
+        profile_temperature = getattr(
+            config,
+            "DIRECT_MARKETING_TTS_TEMPERATURE",
+            0.9,
+        )
     try:
         value = float(
             profile_temperature
