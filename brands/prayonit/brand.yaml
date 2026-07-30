@@ -37,7 +37,7 @@ database:
   path: "prayonit_marketing.db"
 
 tracking:
-  base_url: "https://prayonit.nextwavestudiosapp.com"
+  base_url: "https://prayonit.app"
 
 output:
   filename_prefix: "prayonit"
